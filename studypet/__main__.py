@@ -2,12 +2,17 @@
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 
 from .tasks import TaskStore
 
 
 def main():
+    # Redirected output on non-Chinese Windows may otherwise use cp1252.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="StudyPet 本地任务工具（早期版本）")
     parser.add_argument("--db", default=".local/studypet.sqlite3", help="任务数据库路径")
     commands = parser.add_subparsers(dest="command", required=True)
