@@ -125,6 +125,8 @@ def calendar_page(now, rows, path):
 def window_label(minutes):
     if not minutes:
         return '配额窗口'
+    if minutes == 10080:
+        return '每周'
     if minutes >= 1440 and minutes % 1440 == 0:
         return f'{minutes // 1440}天'
     if minutes % 60 == 0:
@@ -147,15 +149,16 @@ def codex_page(now, snapshot, path):
             tx((16, y), '用量暂不可用' if index == 0 else '暂无第二用量窗口', 16)
             continue
         used = max(0, min(100, float(window['usedPercent'])))
-        tx((16, y), f'{window_label(window.get("windowDurationMins"))}  已用 {used:g}%', 17, True)
+        remaining = 100 - used
+        tx((16, y), f'{window_label(window.get("windowDurationMins"))}  剩余 {remaining:g}%', 17, True)
         reset = window.get('resetsAt')
         if reset:
             date = datetime.fromtimestamp(reset, SHANGHAI)
             reset_text = date.strftime('%H:%M') if date.date() == now.date() else date.strftime('%m/%d %H:%M')
             tx((256, y + 3), '重置 ' + reset_text, 12)
         draw.rectangle((16, y + 25, 384, y + 30), outline=0)
-        if used:
-            draw.rectangle((16, y + 25, 16 + round(368 * used / 100), y + 30), fill=0)
+        if remaining:
+            draw.rectangle((16, y + 25, 16 + round(368 * remaining / 100), y + 30), fill=0)
     tx((16, 154), '最近回复摘录', 16, True)
     body = plain_excerpt(snapshot.get('reply', '')) or snapshot.get('reply_error') or '暂无已完成回复'
     for index, line in enumerate(wrap(body, font(path, 16), 368, 4)):
@@ -164,7 +167,7 @@ def codex_page(now, snapshot, path):
     tx((16, 281), 'KEY 返回学习计划', 12)
     stamp = snapshot.get('sampled_at', now)
     label = '更新失败 ' if snapshot.get('error') else '同步 '
-    tx((265, 281), label + stamp.strftime('%H:%M'), 12)
+    tx((245, 281), label + stamp.strftime('%H:%M:%S'), 12)
     return image.point(lambda value: 255 if value >= 128 else 0, mode='1')
 
 
