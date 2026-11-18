@@ -56,7 +56,8 @@ Get-FileHash factory-backup.bin -Algorithm SHA256
 idf.py -p COM3 flash
 ```
 
-烧录成功后原生 USB 改由音频协议使用，原 COM 口可能消失，这是预期行为。
+新版烧录后 USB 会重新枚举，旧 COM 口可能消失，随后出现音频设备与新的屏幕 CDC 串口。
+旧纯音响固件只有音频接口，没有持续可用的 CDC 串口。
 需要重新烧录或恢复时，按住 **BOOT**，让开发板重新上电，再松开 **BOOT**。
 未安装电池时，可按住 BOOT 拔插 USB 数据线；已安装电池则需要确认开发板真正重新上电。
 本板实测可以保持 USB 连接，长按 PWR 后松开，再按住 BOOT、单击 PWR，约 2 秒后松开 BOOT。
