@@ -1,6 +1,6 @@
 # 数据存储设计
 
-当前正式版本为 v3，资料库的 documents、document_chunks 和 sources 已通过正式迁移建立。v3 增加 documents.category。本目录 SQL 是早期 v1 的参考草案，运行数据库以正式迁移和 [资料库说明](../LIBRARY.md) 为准。
+当前正式版本为 v4。v3 增加 documents.category，v4 增加 profile_entries，用来保存用户主动填写的阶段、经历、能力、目标、偏好与约束。记录可关联一份资料，编辑使用 revision 校验。未来从对话提取的候选信息仍按下文设计处理。本目录 SQL 是早期 v1 的参考草案，运行数据库以正式迁移为准。
 
 ## 1. 文件、数据库与配置
 

@@ -55,7 +55,7 @@ PDF 使用 pypdf（BSD-3-Clause），图片校验使用 Pillow（本机安装版
 
 ## 存储和版本
 
-- 主库为 `.local/studypet.sqlite3`，当前正式 schema 为 **v3**。资料分类存于 `documents.category`。
+- 主库为 `.local/studypet.sqlite3`，资料分类存于 `documents.category`。个人档案通过 `profile_entries.document_id` 关联资料。
 - 新增 `documents`、`document_chunks`、`sources` 三表，共 8 张业务表。
 - 原件在 `.local/attachments/<document_id>/1/original.<ext>`，原始用户文件不修改。
 - 更正后的文字版本保存在数据库，原件路径不随文字修订移动。

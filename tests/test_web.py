@@ -148,6 +148,31 @@ class PlannerWebTests(unittest.TestCase):
         self.assertEqual(code, 400)
         self.assertEqual(self.request('GET', f'{documents}/{ids[0]}')[1]['category'], 'campus_recruitment')
 
+    def test_profile_edit_and_removed_document_reference(self):
+        with closing(HTTPConnection('127.0.0.1', self.server.server_port, timeout=15)) as connection:
+            connection.request('POST', '/api/library/documents?filename=evidence.md', b'private fixture',
+                               {'Content-Type': 'application/octet-stream'})
+            response = connection.getresponse()
+            document_id = json.loads(response.read())['id']
+            self.assertEqual(response.status, 201)
+        body = {'kind': 'skill', 'title': '虚构能力', 'details': '自己确认的证据', 'document_id': document_id}
+        code, payload = self.request('POST', '/api/profile', body)
+        self.assertEqual(code, 201)
+        path = f'/api/profile/{payload["id"]}'
+        entry = self.request('GET', '/api/profile')[1]['entries'][0]
+        self.assertEqual(entry['document_title'], 'evidence')
+
+        update = dict(body, title='校正后的能力', revision=entry['revision'])
+        self.assertEqual(self.request('PATCH', path, update)[0], 200)
+        self.assertEqual(self.request('PATCH', path, update)[0], 400)
+        self.assertEqual(self.request('DELETE', f'/api/library/documents/{document_id}')[0], 200)
+        self.assertEqual(self.request('POST', '/api/profile', body)[0], 400)
+        entry = self.request('GET', '/api/profile')[1]['entries'][0]
+        self.assertEqual(entry['title'], '校正后的能力')
+        self.assertIsNone(entry['document_title'])
+        self.assertEqual(self.request('DELETE', path)[0], 200)
+        self.assertEqual(self.request('GET', '/api/profile')[1]['entries'], [])
+
 
 if __name__ == '__main__':
     unittest.main()

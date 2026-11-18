@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit, quote
 from .tasks import TaskStore
 from .agent import AgentStore, ReminderEngine
 from .notifications import DesktopNotifier
+from .profile import PROFILE_KINDS, ProfileStore
 from .knowledge.library import DOCUMENT_CATEGORIES, LibraryStore, MAX_UPLOAD_BYTES
 
 SHANGHAI = timezone(timedelta(hours=8), 'Asia/Shanghai')
@@ -43,6 +44,7 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
     local = Path(state_dir)
     library = LibraryStore(db,local)
     library.recover_incomplete()
+    profile = ProfileStore(db)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -72,6 +74,9 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 self.respond(403, {'error': '只接受本机访问'})
                 return
             parsed = urlsplit(self.path)
+            if parsed.path == '/api/profile':
+                self.respond(200, {'entries': profile.list(), 'kinds': PROFILE_KINDS})
+                return
             if parsed.path.startswith('/api/library/'):
                 try:
                     document_match = re.fullmatch(r'/api/library/documents/([0-9a-f-]{36})(/original|/preview)?',parsed.path)
@@ -149,6 +154,8 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                                   'today': datetime.now(SHANGHAI).date().isoformat()})
                 return
             assets = {'/': STATIC / 'index.html', '/app.css': STATIC / 'app.css', '/app.js': STATIC / 'app.js',
+                      '/profile': STATIC / 'profile.html', '/profile.js': STATIC / 'profile.js',
+                      '/profile.css': STATIC / 'profile.css',
                       '/library':STATIC/'library.html','/library.js':STATIC/'library.js','/library.css':STATIC/'library.css',
                       '/favicon.svg': STATIC / 'favicon.svg',
                       '/assets/font.ttf': local / 'fonts/NotoSansSC-wght.ttf',
@@ -175,9 +182,14 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 return
             path = urlsplit(self.path).path
             match = re.fullmatch(r'/api/tasks/(\d+)', path)
+            profile_match = re.fullmatch(r'/api/profile/([0-9a-f-]{36})', path)
             try:
                 document_match = re.fullmatch(r'/api/library/documents/([0-9a-f-]{36})',path)
                 if self.command == 'DELETE':
+                    if profile_match:
+                        profile.delete(profile_match[1])
+                        self.respond(200, {'ok': True})
+                        return
                     if document_match:
                         library.delete(document_match[1])
                         self.respond(200,{'ok':True})
@@ -218,7 +230,14 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                     return
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
-                    raise ValueError('计划格式不正确')
+                    raise ValueError('请求格式不正确')
+                if self.command == 'POST' and path == '/api/profile':
+                    self.respond(201, {'id': profile.save(body)})
+                    return
+                if self.command == 'PATCH' and profile_match:
+                    profile.save(body, profile_match[1])
+                    self.respond(200, {'ok': True})
+                    return
                 if self.command == 'PATCH' and path == '/api/library/document-categories':
                     count = library.set_category(body.get('document_ids'),body.get('category'))
                     self.respond(200,{'count':count})

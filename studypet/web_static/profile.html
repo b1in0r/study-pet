@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>个人档案 · StudyPet</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/profile.css">
+  <script src="/profile.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span>StudyPet</span></a>
+    <nav aria-label="主导航">
+      <a href="/">学习计划</a>
+      <a href="/library">资料库</a>
+      <a href="/profile" aria-current="page">个人档案</a>
+    </nav>
+  </header>
+  <main class="profile-page">
+    <h1>个人档案</h1>
+    <p class="profile-intro">记录你现在的情况、做过的事和下一步目标。档案保存在本机。</p>
+    <div class="profile-layout">
+      <section aria-labelledby="saved-heading">
+        <h2 id="saved-heading">已保存的档案 <span id="profile-count"></span></h2>
+        <p id="profile-error" class="inline-error" role="alert" hidden></p>
+        <div id="profile-list"></div>
+      </section>
+      <section class="profile-editor" aria-labelledby="entry-heading">
+        <h2 id="entry-heading">添加记录</h2>
+        <form id="profile-form">
+          <label for="profile-kind">类型</label>
+          <select id="profile-kind" required><option value="">请选择类型</option></select>
+          <label for="profile-title">标题</label>
+          <input id="profile-title" maxlength="120" placeholder="例如：毕业时间" required>
+          <label for="profile-details">内容</label>
+          <textarea id="profile-details" maxlength="4000" rows="5" required></textarea>
+          <label for="profile-document">关联资料（选填）</label>
+          <select id="profile-document"><option value="">选择资料库中的文件</option></select>
+          <div class="profile-actions">
+            <button class="primary-button" id="save-profile" type="submit" disabled>保存记录</button>
+            <button class="secondary-button" id="cancel-profile" type="button" hidden>取消编辑</button>
+          </div>
+          <p id="profile-status" role="status"></p>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

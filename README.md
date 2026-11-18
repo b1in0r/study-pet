@@ -76,7 +76,7 @@ Codex app-server ── 用量 / 完成回复 ── 屏幕桥接
 
 ## 参与开发
 
-个人助理的目录、数据存储和上下文设计见 [架构规划](docs/architecture/README.md)。当前正式库为 v3，已落地资料库、资料分类与统一迁移入口。
+当前 SQLite 为 v4。打开 [个人档案](http://127.0.0.1:8765/profile) 可维护阶段、经历、能力、目标、偏好与约束，并关联资料库文件。个人助理的目录、数据存储和上下文设计见 [架构规划](docs/architecture/README.md)。
 
 请先阅读 [开发路线](docs/ROADMAP.md)、[设计约定](docs/DESIGN.md)、[硬件预算](docs/HARDWARE.md) 和 [贡献指南](CONTRIBUTING.md)。版本与分支约定见 [版本管理](docs/VERSION_CONTROL.md)，历史变化见 [更新记录](CHANGELOG.md)。
 
