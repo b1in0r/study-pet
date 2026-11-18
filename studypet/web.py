@@ -4,12 +4,15 @@ import json
 import mimetypes
 import re
 import sys
+from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from .tasks import TaskStore
+from .agent import AgentStore, ReminderEngine
+from .notifications import DesktopNotifier
 
 SHANGHAI = timezone(timedelta(hours=8), 'Asia/Shanghai')
 STATIC = Path(__file__).with_name('web_static')
@@ -33,8 +36,9 @@ def task_fields(body):
     return title.strip(), due
 
 
-def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local'):
+def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *, enable_agent=False, notifier=None):
     store = TaskStore(db)
+    agent = AgentStore(store)
     local = Path(state_dir)
 
     class Handler(BaseHTTPRequestHandler):
@@ -63,6 +67,19 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local'):
                 self.respond(403, {'error': '只接受本机访问'})
                 return
             parsed = urlsplit(self.path)
+            if parsed.path == '/api/agent':
+                engine = getattr(self.server,'agent_engine',None)
+                payload = agent.daily_context()
+                payload.update(reminders=agent.reminders(),running=bool(engine and engine.thread and engine.thread.is_alive()),
+                               error=engine.error if engine else None,
+                               last_checked=engine.last_tick if engine else None,
+                               desktop_available=bool(engine and engine.notifier.available),
+                               desktop_last_visible_at=getattr(engine.notifier,'last_visible_at',None) if engine else None)
+                self.respond(200,payload)
+                return
+            if parsed.path == '/api/agent/history':
+                self.respond(200,{'events':store.history(100)})
+                return
             if parsed.path == '/api/tasks':
                 try:
                     selected = parse_day(parse_qs(parsed.query).get('date', [datetime.now(SHANGHAI).date().isoformat()])[0])
@@ -125,6 +142,11 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local'):
             match = re.fullmatch(r'/api/tasks/(\d+)', path)
             try:
                 if self.command == 'DELETE':
+                    memory_match = re.fullmatch(r'/api/agent/memories/(\d+)', path)
+                    if memory_match:
+                        agent.delete_memory(int(memory_match[1]))
+                        self.respond(200,{'ok':True})
+                        return
                     if not match:
                         self.respond(404, {'error': '未找到计划'})
                         return
@@ -135,13 +157,30 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local'):
                     self.respond(415, {'error': '请使用 JSON 格式'})
                     return
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 8192:
+                if not 0 < length <= 32768:
                     self.respond(413, {'error': '请求内容过大或为空'})
                     return
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('计划格式不正确')
-                if self.command == 'POST' and path == '/api/tasks':
+                reminder_action = re.fullmatch(r'/api/agent/reminders/(\d+)/(ack|snooze)',path)
+                if self.command == 'POST' and path == '/api/agent/settings':
+                    agent.update_settings(body)
+                    self.respond(200,{'ok':True})
+                elif self.command == 'POST' and path == '/api/agent/memories':
+                    ident = agent.add_memory(body.get('kind'),body.get('title'),body.get('content'))
+                    self.respond(201,{'id':ident})
+                elif self.command == 'POST' and reminder_action:
+                    ident = int(reminder_action[1])
+                    agent.acknowledge(ident) if reminder_action[2] == 'ack' else agent.snooze(ident)
+                    self.respond(200,{'ok':True})
+                elif self.command == 'POST' and path == '/api/agent/test-notification':
+                    engine = getattr(self.server,'agent_engine',None)
+                    accepted = bool(engine and engine.notifier.send('StudyPet 提醒测试','这是一条测试通知。任务到时间时，我会这样提醒你。'))
+                    with closing(store._connect()) as db, db:
+                        store.event(db,'notification_test',after={'accepted':accepted})
+                    self.respond(200,{'accepted':accepted})
+                elif self.command == 'POST' and path == '/api/tasks':
                     title, due = task_fields(body)
                     task_id = store.add(title, due)
                     self.respond(201, {'id': task_id})
@@ -160,7 +199,19 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local'):
 
         do_POST = do_PATCH = do_DELETE = mutate
 
-    return ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    class PlannerServer(ThreadingHTTPServer):
+        agent_engine = None
+        def server_close(self):
+            if self.agent_engine:
+                self.agent_engine.close()
+                self.agent_engine = None
+            super().server_close()
+
+    server = PlannerServer(('127.0.0.1', port), Handler)
+    if enable_agent:
+        server.agent_engine = ReminderEngine(agent, notifier or DesktopNotifier(f'http://127.0.0.1:{server.server_port}'))
+        server.agent_engine.start()
+    return server
 
 
 def main():
@@ -171,8 +222,9 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--db', default='.local/studypet.sqlite3')
     parser.add_argument('--state-dir', default='.local')
+    parser.add_argument('--no-agent', action='store_true', help='关闭后台提醒，仅运行计划网页')
     args = parser.parse_args()
-    with create_server(args.port, args.db, args.state_dir) as server:
+    with create_server(args.port, args.db, args.state_dir, enable_agent=not args.no_agent) as server:
         print(f'StudyPet 计划管理：http://127.0.0.1:{server.server_port}', flush=True)
         try:
             server.serve_forever()

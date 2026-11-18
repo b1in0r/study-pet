@@ -91,6 +91,7 @@ function renderTasks() {
       try {
         await api(`/api/tasks/${task.id}`, {method:'PATCH',body:JSON.stringify({status:check.checked ? 'done' : 'pending'})});
         await loadTasks();
+        refreshAgent();
         notify(check.checked ? '完成了一项计划' : '已恢复为待完成');
       } catch (error) { check.checked = !check.checked; check.disabled = false; notify(error.message,true); }
     });
@@ -187,6 +188,7 @@ $('#add-form').addEventListener('submit',async event => {
     await selectDate(payload.date);
     $('#task-title').focus();
     notify('计划已保存，稍后同步到桌历');
+    refreshAgent();
   } catch (error) { notify(error.message,true); }
   finally { button.disabled = false; }
 });
@@ -199,6 +201,7 @@ $('#edit-form').addEventListener('submit',async event => {
     $('#edit-dialog').close();
     await selectDate(payload.date);
     notify('修改已保存');
+    refreshAgent();
   } catch (error) { notify(error.message,true); }
   finally { button.disabled = false; }
 });
@@ -209,6 +212,7 @@ $('#confirm-delete').addEventListener('click',async () => {
     $('#delete-dialog').close();
     await loadTasks();
     notify('计划已删除');
+    refreshAgent();
   } catch (error) { notify(error.message,true); }
   finally { button.disabled = false; }
 });
@@ -241,7 +245,9 @@ async function start() {
     $('#task-time').value = '20:00';
     await selectDate(state.today);
     refreshPreview(); await refreshStatus();
+    await refreshAgent();
     setInterval(refreshStatus, 10000);
+    setInterval(refreshAgent, 5000);
     setInterval(loadTasks, 30000);
   } catch (error) {
     $('#load-error').hidden = false;
@@ -249,4 +255,107 @@ async function start() {
     $('#sync-status').textContent = '本地服务未连接';
   }
 }
+let agentData = null;
+let reminderSignature = '';
+let memorySignature = '';
+const memoryKinds = {goal:'长期目标',preference:'学习偏好',note:'随手记',reflection:'复盘'};
+async function refreshAgent() {
+  try {
+    agentData = await api('/api/agent');
+    $('#agent-summary').textContent = agentData.summary;
+    const enabled = agentData.settings.reminders_enabled;
+    $('#toggle-reminders').textContent = enabled ? '暂停提醒' : '继续提醒';
+    $('#toggle-reminders').setAttribute('aria-pressed',String(enabled));
+    $('#agent-health').textContent = !agentData.running ? '后台提醒未运行' : agentData.error ? '提醒检查暂不可用' : !enabled ? '新提醒已暂停' : agentData.desktop_available ? '电脑通知与网页提醒已开启' : '网页提醒已开启，电脑通知暂不可用';
+    const signature = JSON.stringify(agentData.reminders);
+    if (signature !== reminderSignature) { reminderSignature=signature; renderReminders(); }
+    if ($('#memory-dialog').open && JSON.stringify(agentData.memories) !== memorySignature) renderMemories();
+  } catch (_) {
+    $('#agent-health').textContent = '桌宠服务暂不可用';
+  }
+}
+function renderReminders() {
+  const list = $('#reminder-list'); list.replaceChildren();
+  for (const reminder of agentData.reminders) {
+    const entry = document.createElement('article'); entry.className='reminder-item';
+    const heading = document.createElement('h3'); heading.textContent=`${timeLabel.format(new Date(reminder.due_at))} 的计划到时间了`;
+    const content = document.createElement('p'); content.textContent=reminder.current_title;
+    const actions = document.createElement('div'); actions.className='reminder-actions';
+    const perform = async (action) => {
+      actions.querySelectorAll('button').forEach(b=>b.disabled=true);
+      try {
+        if(action==='done') await api(`/api/tasks/${reminder.task_id}`,{method:'PATCH',body:JSON.stringify({status:'done'})});
+        else await api(`/api/agent/reminders/${reminder.id}/${action}`,{method:'POST',body:'{}'});
+        await loadTasks(); await refreshAgent();
+        notify(action==='done' ? '已完成这项计划' : action==='snooze' ? '已调整为 10 分钟后提醒' : '已记下，不再重复提醒这次任务');
+      } catch(error) { actions.querySelectorAll('button').forEach(b=>b.disabled=false); notify(error.message,true); }
+    };
+    for(const [label,action] of [['完成','done'],['10分钟后提醒','snooze'],['知道了','ack']]) actions.append(taskButton(label,'text-button',()=>perform(action)));
+    entry.append(heading,content,actions); list.append(entry);
+  }
+}
+function renderMemories() {
+  if(!agentData) return;
+  memorySignature=JSON.stringify(agentData.memories);
+  const list=$('#memory-list'); list.replaceChildren();
+  if(!agentData.memories.length) {
+    const empty=document.createElement('p'); empty.className='memory-empty'; empty.textContent='还没有长期记忆。写下一条学习目标，或今天的复盘。'; list.append(empty);
+  }
+  for(const memory of agentData.memories) {
+    const entry=document.createElement('article'); entry.className='memory-entry';
+    const header=document.createElement('header'); const title=document.createElement('h3'); title.textContent=memory.title;
+    const remove=taskButton('删除','text-button',async()=>{
+      if(!confirm('删除这条记忆？正文会从记忆本中移除。')) return;
+      try { await api(`/api/agent/memories/${memory.id}`,{method:'DELETE'}); await refreshAgent(); renderMemories(); }
+      catch(error) {notify(error.message,true);}
+    });
+    header.append(title,remove);
+    const meta=document.createElement('small'); meta.textContent=`${memoryKinds[memory.kind]} · ${dateLabel.format(new Date(memory.created_at))}`;
+    const body=document.createElement('p'); body.textContent=memory.content;
+    entry.append(header,meta,body); list.append(entry);
+  }
+}
+const historyLabels={created:'创建计划',updated:'修改计划',completed:'完成计划',reopened:'恢复为待完成',rescheduled:'调整计划时间',deleted:'移除计划',snapshot_imported:'旧计划首次记录',reminder_queued:'生成到点提醒',reminder_sent:'已提交电脑通知',reminder_failed:'电脑通知未成功',reminder_acknowledged:'已确认提醒',memory_added:'新增长期记忆',memory_deleted:'删除长期记忆',settings_changed:'调整提醒设置',notification_test:'发送测试通知'};
+async function showHistory() {
+  $('#history-dialog').showModal();
+  const list=$('#history-list'); list.textContent='正在读取历史…';
+  try {
+    const data=await api('/api/agent/history'); list.replaceChildren();
+    if(!data.events.length) {list.textContent='历史会从现在开始记录。';return;}
+    for(const event of data.events) {
+      const row=document.createElement('article'); row.className='history-entry';
+      const time=document.createElement('time'); time.dateTime=event.at;
+      time.textContent=`${dateLabel.format(new Date(event.at))} ${timeLabel.format(new Date(event.at))}`;
+      const message=document.createElement('p'); const snapshot=event.after || event.before || {};
+      message.textContent=(historyLabels[event.kind] || event.kind)+(snapshot.title ? `：${snapshot.title}` : '');
+      row.append(time,message);
+      if(event.kind==='snapshot_imported') {const note=document.createElement('small');note.textContent='记录启用时的状态；更早的创建与完成时间未知。';row.append(note);}
+      if(event.before && event.after && event.before.due_at!==event.after.due_at && event.after.due_at) {
+        const note=document.createElement('small');note.textContent=`调整为 ${dateLabel.format(new Date(event.after.due_at))} ${timeLabel.format(new Date(event.after.due_at))}`;row.append(note);
+      }
+      list.append(row);
+    }
+  } catch(error) {list.textContent='历史读取失败，请关闭后重试。';}
+}
+$('#toggle-reminders').addEventListener('click',async()=>{
+  if(!agentData) return;
+  try {await api('/api/agent/settings',{method:'POST',body:JSON.stringify({reminders_enabled:!agentData.settings.reminders_enabled})});await refreshAgent();}
+  catch(error){notify(error.message,true);}
+});
+$('#test-notification').addEventListener('click',async()=>{
+  const button=$('#test-notification');button.disabled=true;
+  try {const result=await api('/api/agent/test-notification',{method:'POST',body:'{}'});notify(result.accepted ? '测试通知已提交给 Windows' : '电脑通知暂不可用，请检查系统通知设置',!result.accepted);}
+  catch(error){notify(error.message,true);} finally{button.disabled=false;}
+});
+$('#open-memories').addEventListener('click',async()=>{await refreshAgent();renderMemories();$('#memory-dialog').showModal();});
+$('#close-memories').addEventListener('click',()=>$('#memory-dialog').close());
+$('#open-history').addEventListener('click',showHistory);
+$('#close-history').addEventListener('click',()=>$('#history-dialog').close());
+$('#memory-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=$('#save-memory');button.disabled=true;
+  try {
+    await api('/api/agent/memories',{method:'POST',body:JSON.stringify({kind:$('#memory-kind').value,title:$('#memory-title').value,content:$('#memory-content').value})});
+    $('#memory-title').value='';$('#memory-content').value='';await refreshAgent();renderMemories();notify('这条信息已存进记忆本');
+  } catch(error){notify(error.message,true);} finally{button.disabled=false;}
+});
 start();

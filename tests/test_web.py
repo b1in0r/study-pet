@@ -81,6 +81,21 @@ class PlannerWebTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn(b'id="add-form"', body)
 
+    def test_agent_memory_settings_and_history_api(self):
+        content = '学' * 4000
+        code, result = self.request('POST','/api/agent/memories',
+                                    {'kind':'preference','title':'学习偏好','content':content})
+        self.assertEqual(code,201)
+        context=self.request('GET','/api/agent')[1]
+        self.assertEqual(context['memories'][0]['content'],content)
+        self.assertFalse(context['running'])
+        self.assertEqual(self.request('POST','/api/agent/settings',{'reminders_enabled':False})[0],200)
+        self.assertFalse(self.request('GET','/api/agent')[1]['settings']['reminders_enabled'])
+        self.assertEqual(self.request('DELETE',f'/api/agent/memories/{result["id"]}')[0],200)
+        self.assertEqual(self.request('GET','/api/agent')[1]['memories'],[])
+        history=self.request('GET','/api/agent/history')[1]['events']
+        self.assertEqual(history[0]['kind'],'memory_deleted')
+
 
 if __name__ == '__main__':
     unittest.main()
