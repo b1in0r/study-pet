@@ -10,7 +10,8 @@
 - USB 产品名称：`StudyPet USB Speaker`，USB Audio Class 2。
   Windows 实测输出名称为 **扬声器（usb uac）**，来自乐鑫组件的音频接口描述。
 - 固定 48 kHz / 16-bit / 双声道输入；固件将左右声道取平均并播放单声道。
-- Windows 音量和静音通过 USB 控制；编解码器音量上限设为 70，初始为 28。
+- Windows 音量和静音通过 USB 控制；编解码器使用完整 0–100 音量范围，初始为 40。
+  最大音量对应驱动音量曲线的 0 dB，不对 PCM 额外加增益。
 - 此原型沿用乐鑫示例的 VID/PID，仅用于开发验证，量产需合法分配 USB 标识。
 
 接线来自[微雪官方板级配置](https://github.com/waveshareteam/ESP32-S3-RLCD-4.2/blob/9e754fdf431ef4fce21e4e8b19bd4079ba043e86/examples/esp-idf/07_Audio_Test/components/ExternLib/codec_board/board_cfg.txt)：
@@ -54,9 +55,10 @@ idf.py -p COM3 flash
 ```
 
 烧录成功后原生 USB 改由音频协议使用，原 COM 口可能消失，这是预期行为。
-需要重新烧录或恢复时，按住 **BOOT**，短按 **RESET**，松开 **BOOT**，
-等待 Windows 重新出现串口，核对新端口号再运行命令。若板上按键标识不同，
-以[微雪官方文档](https://docs.waveshare.net/ESP32-S3-RLCD-4.2/)为准。
+需要重新烧录或恢复时，按住 **BOOT**，让开发板重新上电，再松开 **BOOT**。
+未安装电池时，可按住 BOOT 拔插 USB 数据线；已安装电池则需要确认开发板真正重新上电。
+等待 Windows 重新出现串口，核对新端口号再运行命令。
+按键及下载模式说明见[微雪官方文档](https://docs.waveshare.net/ESP32-S3-RLCD-4.2/)。
 
 完整恢复备份（esptool 5）：
 
@@ -77,6 +79,10 @@ python -m esptool --port COM3 --baud 921600 write-flash 0 factory-backup.bin
 端点识别和播放流可以由电脑验证；实际听感需在设备旁确认。
 
 ### 2026-11-18 实测
+
+以下听音记录对应最初限制编解码器最大音量为 70 的版本。
+后续移除了 `volume * 0.70`，因为驱动将 70 映射为 −15 dB、100 映射为 0 dB；
+原限制导致 Windows 满音量时仍有额外 15 dB 衰减。新版的实际听感待重新烧录后确认。
 
 - ESP-IDF v5.5.5 编译通过，应用固件大小 287,584 字节。
 - 烧录的 bootloader、分区表、应用均通过 esptool 数据校验。

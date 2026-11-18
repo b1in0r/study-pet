@@ -81,7 +81,7 @@ static void open_speaker(void)
         .sample_rate = 48000, .channel = 2, .bits_per_sample = 16,
     };
     ESP_ERROR_CHECK(esp_codec_dev_open(speaker, &format));
-    ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(speaker, 28));
+    ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(speaker, 40));
 }
 
 static esp_err_t play_usb_audio(uint8_t *buf, size_t len, void *ctx)
@@ -127,8 +127,10 @@ static void volume_task(void *ctx)
             previous_mute = mute;
         }
         if (volume != previous_volume) {
-            // Limit codec gain while retaining the full Windows slider range.
-            ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(speaker, volume * 0.70f));
+            // The codec maps 0..100 to -50..0 dB (0 is silent). Scaling by
+            // 0.70 imposed an extra 15 dB attenuation at the Windows maximum.
+            // Preserve its full range; do not add PCM gain above full scale.
+            ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(speaker, (int)volume));
             previous_volume = volume;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
