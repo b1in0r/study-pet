@@ -1,5 +1,6 @@
 """PC screen bridge. Run: python -m studypet.display --help."""
 import argparse
+import json
 import os
 import sys
 import time
@@ -10,6 +11,24 @@ from .codex_status import CodexStatus
 from .screen_protocol import frame_packet, pack_pixels
 from .screen_render import SHANGHAI, calendar_page, codex_page, prepare_font
 from .tasks import TaskStore
+
+
+def save_screen_status(directory, connected):
+    """Expose only confirmed device sync health to the local planner UI."""
+    target = directory / 'screen-state.json'
+    try:
+        previous = json.loads(target.read_text(encoding='utf-8')) if target.exists() else {}
+        if not isinstance(previous, dict):
+            previous = {}
+        previous['connected'] = connected
+        if connected:
+            previous['last_sync_at'] = datetime.now(SHANGHAI).isoformat(timespec='seconds')
+        temporary = target.with_suffix('.tmp')
+        temporary.write_text(json.dumps(previous), encoding='utf-8')
+        temporary.replace(target)
+    except (OSError, ValueError):
+        # Health reporting must not interrupt the audio/display bridge.
+        pass
 
 
 def find_port():
@@ -80,8 +99,10 @@ def main():
             if args.port:
                 try:
                     send_pages(args.port, pages)
+                    save_screen_status(output.parent, True)
                     print(now.strftime('%H:%M:%S'), '已同步日历与 Codex 两页', flush=True)
                 except (RuntimeError, TimeoutError, OSError) as error:
+                    save_screen_status(output.parent, False)
                     print('屏幕同步暂不可用：', error, flush=True)
                     if not args.watch:
                         raise

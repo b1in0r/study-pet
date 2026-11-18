@@ -42,7 +42,11 @@ python -m studypet.display --port auto --watch --thread-id YOUR_THREAD_ID
 不会把屏幕数据发给 ROM 下载串口或其他串口设备；多台设备请显式指定 `--port COM端口`。
 可用 `--interval 60` 降低更新频率。
 
-添加已确认的学习计划仍使用现有任务工具：
+填写计划可以使用[本地网页](PLANNER.md)：双击仓库根目录的“打开计划管理.cmd”，
+或运行 `python -m studypet.web` 后访问 `http://127.0.0.1:8765`。
+网页与屏幕共用任务数据库，保存后约 30 秒同步。
+
+也可以继续使用现有任务工具：
 
 ```powershell
 python -m studypet add "阅读一篇论文" --due "2026-11-19T19:00:00+08:00"

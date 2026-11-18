@@ -21,3 +21,5 @@ managed_components/
 sdkconfig
 sdkconfig.old
 *.egg-info/
+.playwright-cli/
+output/playwright/

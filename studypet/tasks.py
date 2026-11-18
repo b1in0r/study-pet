@@ -52,7 +52,34 @@ class TaskStore:
             return [dict(row) for row in db.execute(query, params)]
 
     def complete(self, task_id: int) -> None:
+        self.update(task_id, status="done")
+
+    def update(self, task_id: int, *, title: str | None = None,
+               due_at: datetime | None = None, status: str | None = None) -> None:
+        fields, params = [], []
+        if title is not None:
+            title = title.strip()
+            if not title:
+                raise ValueError("任务标题不能为空")
+            fields.append("title = ?")
+            params.append(title)
+        if due_at is not None:
+            fields.append("due_at = ?")
+            params.append(aware_utc(due_at).isoformat(timespec="microseconds"))
+        if status is not None:
+            if status not in ("pending", "done"):
+                raise ValueError("任务状态必须是 pending 或 done")
+            fields.append("status = ?")
+            params.append(status)
+        if not fields:
+            raise ValueError("没有需要更新的内容")
         with closing(self._connect()) as db, db:
-            cursor = db.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (task_id,))
+            cursor = db.execute(f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?", (*params, task_id))
+            if cursor.rowcount == 0:
+                raise ValueError(f"找不到任务 {task_id}")
+
+    def delete(self, task_id: int) -> None:
+        with closing(self._connect()) as db, db:
+            cursor = db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
             if cursor.rowcount == 0:
                 raise ValueError(f"找不到任务 {task_id}")
