@@ -2,7 +2,7 @@
 
 ## 目标目录
 
-下列是逐步到达的结构。除本次新增设计文档外，新增 Python 目录尚未创建，避免出现大量空模块。
+下列是逐步到达的结构。当前已建立 storage 的连接/迁移入口及 knowledge 的资料库/提取模块；其余按实际开发建立，避免出现大量空模块。
 
 ```text
 study-pet/
@@ -30,15 +30,16 @@ study-pet/
 │  ├─ memory/                     # 待建：记忆提取与维护
 │  │  ├─ extraction.py            # 从已完成对话生成候选事实
 │  │  └─ consolidation.py         # 合并候选、检测冲突，不越过确认规则
-│  ├─ storage/                    # 待建：唯一连接工厂和版本迁移
+│  ├─ storage/                    # 已建：唯一连接工厂和版本迁移
 │  │  ├─ database.py
 │  │  ├─ migrate.py
-│  │  ├─ migrations/              # 正式启用后才放 0002_*.sql 等迁移
-│  │  └─ repositories/            # SQL 封装，不调用模型、不弹窗
-│  ├─ knowledge/                  # 待建：用户选择导入的资料
-│  │  ├─ importers.py
-│  │  ├─ chunking.py
-│  │  └─ search.py
+│  │  ├─ migrations/              # 已启用 0002_document_library.sql
+│  │  └─ repositories/            # 待建：SQL 封装，不调用模型、不弹窗
+│  ├─ knowledge/                  # 已建：用户选择导入的资料
+│  │  ├─ library.py               # 原件、版本、分块与检索；后续按需要拆分
+│  │  ├─ extract.py               # PDF、DOCX、文本与图片提取
+│  │  ├─ worker.py                # 独立解析进程
+│  │  └─ ocr.py                   # Windows 本地 OCR
 │  ├─ models/                     # 待建：供应商适配、流式输出、token 计量
 │  │  ├─ base.py
 │  │  └─ providers.py

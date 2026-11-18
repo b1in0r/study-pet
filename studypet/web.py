@@ -8,11 +8,12 @@ from contextlib import closing
 from datetime import date, datetime, time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, quote
 
 from .tasks import TaskStore
 from .agent import AgentStore, ReminderEngine
 from .notifications import DesktopNotifier
+from .knowledge.library import LibraryStore, MAX_UPLOAD_BYTES
 
 SHANGHAI = timezone(timedelta(hours=8), 'Asia/Shanghai')
 STATIC = Path(__file__).with_name('web_static')
@@ -40,12 +41,14 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
     store = TaskStore(db)
     agent = AgentStore(store)
     local = Path(state_dir)
+    library = LibraryStore(db,local)
+    library.recover_incomplete()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
             pass
 
-        def respond(self, code, data, content_type='application/json; charset=utf-8'):
+        def respond(self, code, data, content_type='application/json; charset=utf-8', headers=None):
             if content_type.startswith('application/json'):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
             self.send_response(code)
@@ -54,6 +57,8 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'same-origin')
+            for name,value in (headers or {}).items():
+                self.send_header(name,value)
             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             self.end_headers()
             self.wfile.write(data)
@@ -67,6 +72,33 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 self.respond(403, {'error': '只接受本机访问'})
                 return
             parsed = urlsplit(self.path)
+            if parsed.path.startswith('/api/library/'):
+                try:
+                    document_match = re.fullmatch(r'/api/library/documents/([0-9a-f-]{36})(/original|/preview)?',parsed.path)
+                    if parsed.path == '/api/library/documents':
+                        self.respond(200,{'documents':library.list()})
+                    elif parsed.path == '/api/library/search':
+                        self.respond(200,{'results':library.search(parse_qs(parsed.query).get('q',[''])[0])})
+                    elif document_match and document_match[2]:
+                        file,document = library.original(document_match[1])
+                        if document_match[2] == '/preview':
+                            if not document['mime_type'].startswith('image/'):
+                                raise ValueError('这份资料没有图片预览')
+                            # Only successfully decoded raster images can be displayed inline.
+                            if document['state'] == 'failed':
+                                raise ValueError('图片未能读取，请下载原件检查')
+                            self.respond(200,file.read_bytes(),document['mime_type'])
+                        else:
+                            self.respond(200,file.read_bytes(),'application/octet-stream',
+                                {'Content-Disposition':"attachment; filename*=UTF-8''"+quote(document['original_name'],safe='')})
+                    elif document_match:
+                        data=library.get(document_match[1]);data.pop('storage_relpath',None)
+                        self.respond(200,data)
+                    else:
+                        self.respond(404,{'error':'未找到资料'})
+                except ValueError as error:
+                    self.respond(400,{'error':str(error)})
+                return
             if parsed.path == '/api/agent':
                 engine = getattr(self.server,'agent_engine',None)
                 payload = agent.daily_context()
@@ -115,6 +147,7 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                                   'today': datetime.now(SHANGHAI).date().isoformat()})
                 return
             assets = {'/': STATIC / 'index.html', '/app.css': STATIC / 'app.css', '/app.js': STATIC / 'app.js',
+                      '/library':STATIC/'library.html','/library.js':STATIC/'library.js','/library.css':STATIC/'library.css',
                       '/favicon.svg': STATIC / 'favicon.svg',
                       '/assets/font.ttf': local / 'fonts/NotoSansSC-wght.ttf',
                       '/preview/calendar.png': local / 'display-preview/calendar.png',
@@ -141,7 +174,12 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
             path = urlsplit(self.path).path
             match = re.fullmatch(r'/api/tasks/(\d+)', path)
             try:
+                document_match = re.fullmatch(r'/api/library/documents/([0-9a-f-]{36})',path)
                 if self.command == 'DELETE':
+                    if document_match:
+                        library.delete(document_match[1])
+                        self.respond(200,{'ok':True})
+                        return
                     memory_match = re.fullmatch(r'/api/agent/memories/(\d+)', path)
                     if memory_match:
                         agent.delete_memory(int(memory_match[1]))
@@ -153,16 +191,34 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                     store.delete(int(match[1]))
                     self.respond(200, {'ok': True})
                     return
+                if self.command == 'POST' and path == '/api/library/documents':
+                    if self.headers.get('Content-Type','').split(';')[0].strip() != 'application/octet-stream':
+                        self.respond(415,{'error':'请选择文件上传'})
+                        return
+                    length=int(self.headers.get('Content-Length','0'))
+                    if not 0 < length <= MAX_UPLOAD_BYTES:
+                        self.respond(413,{'error':'请选择 20 MB 以内的非空文件'})
+                        return
+                    filename=parse_qs(urlsplit(self.path).query).get('filename',[''])[0]
+                    data=self.rfile.read(length)
+                    if len(data) != length:
+                        raise ValueError('上传未完成，请重试')
+                    self.respond(201,library.import_file(filename,data))
+                    return
                 if self.headers.get('Content-Type', '').split(';')[0].strip() != 'application/json':
                     self.respond(415, {'error': '请使用 JSON 格式'})
                     return
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 32768:
+                if not 0 < length <= (2_000_000 if document_match else 32768):
                     self.respond(413, {'error': '请求内容过大或为空'})
                     return
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('计划格式不正确')
+                if self.command == 'PATCH' and document_match:
+                    library.update(document_match[1],body)
+                    self.respond(200,{'ok':True})
+                    return
                 reminder_action = re.fullmatch(r'/api/agent/reminders/(\d+)/(ack|snooze)',path)
                 if self.command == 'POST' and path == '/api/agent/settings':
                     agent.update_settings(body)

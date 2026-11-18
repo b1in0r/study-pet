@@ -4,6 +4,7 @@ import threading
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
+from urllib.parse import quote
 
 from studypet.tasks import TaskStore
 from studypet.web import create_server
@@ -95,6 +96,23 @@ class PlannerWebTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/api/agent')[1]['memories'],[])
         history=self.request('GET','/api/agent/history')[1]['events']
         self.assertEqual(history[0]['kind'],'memory_deleted')
+
+    def test_library_binary_upload_search_download_and_delete(self):
+        connection=HTTPConnection('127.0.0.1',self.server.server_port,timeout=15)
+        raw='虚构知识资料：学习规划'.encode()
+        connection.request('POST','/api/library/documents?filename='+quote('笔记.md'),raw,{'Content-Type':'application/octet-stream'})
+        response=connection.getresponse();result=json.loads(response.read())
+        self.assertEqual(response.status,201);ident=result['id']
+        connection.request('GET',f'/api/library/documents/{ident}/original')
+        response=connection.getresponse()
+        self.assertEqual(response.read(),raw)
+        self.assertIn('attachment;',response.getheader('Content-Disposition'))
+        connection.close()
+        self.assertTrue(self.request('GET','/api/library/search?q='+quote('学习规划'))[1]['results'])
+        self.assertEqual(self.request('PATCH',f'/api/library/documents/{ident}',{'enabled':False,'revision':1})[0],200)
+        self.assertEqual(self.request('GET','/api/library/search?q='+quote('学习规划'))[1]['results'],[])
+        self.assertEqual(self.request('DELETE',f'/api/library/documents/{ident}')[0],200)
+        self.assertEqual(self.request('GET','/api/library/documents')[1]['documents'],[])
 
 
 if __name__ == '__main__':

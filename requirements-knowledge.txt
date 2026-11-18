@@ -1,0 +1,10 @@
+# Optional PDF and raster image support; Markdown/TXT/DOCX use the standard library.
+pypdf>=6,<8
+Pillow>=11,<13
+winrt-Windows.Media.Ocr; sys_platform == 'win32'
+winrt-Windows.Graphics.Imaging; sys_platform == 'win32'
+winrt-Windows.Storage; sys_platform == 'win32'
+winrt-Windows.Storage.Streams; sys_platform == 'win32'
+winrt-Windows.Globalization; sys_platform == 'win32'
+winrt-Windows.Foundation; sys_platform == 'win32'
+winrt-Windows.Data.Pdf; sys_platform == 'win32'

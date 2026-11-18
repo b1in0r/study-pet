@@ -1,10 +1,12 @@
 """Small persistent task store; no model or background scheduler required."""
 
 import json
-import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+
+from .storage.database import connect_database
+from .storage.migrate import initialize_database
 
 
 def aware_utc(value: datetime) -> datetime:
@@ -16,45 +18,10 @@ def aware_utc(value: datetime) -> datetime:
 class TaskStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with closing(self._connect()) as db, db:
-            db.execute('BEGIN IMMEDIATE')
-            db.execute("""CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY,
-                title TEXT NOT NULL,
-                due_at TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending'
-                    CHECK(status IN ('pending', 'done'))
-            )""")
-            if db.execute('PRAGMA user_version').fetchone()[0] < 1:
-                columns = {row['name'] for row in db.execute('PRAGMA table_info(tasks)')}
-                for name, declaration in {'created_at':'TEXT', 'updated_at':'TEXT', 'completed_at':'TEXT',
-                                          'deleted_at':'TEXT', 'revision':'INTEGER NOT NULL DEFAULT 1'}.items():
-                    if name not in columns:
-                        db.execute(f'ALTER TABLE tasks ADD COLUMN {name} {declaration}')
-                db.execute('''CREATE TABLE task_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, kind TEXT NOT NULL,
-                    at TEXT NOT NULL, before_json TEXT, after_json TEXT, source TEXT NOT NULL)''')
-                db.execute('''CREATE TABLE reminders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER NOT NULL,
-                    due_at TEXT NOT NULL, title TEXT NOT NULL, created_at TEXT NOT NULL,
-                    state TEXT NOT NULL DEFAULT 'unread', desktop_state TEXT NOT NULL DEFAULT 'pending',
-                    attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, desktop_error TEXT,
-                    UNIQUE(task_id, due_at))''')
-                db.execute('''CREATE TABLE memories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
-                    title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)''')
-                db.execute('CREATE TABLE agent_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
-                db.executemany('INSERT INTO agent_settings VALUES (?, ?)',
-                               [('reminders_enabled','true'), ('desktop_enabled','true')])
-                for row in db.execute('SELECT * FROM tasks').fetchall():
-                    self.event(db, 'snapshot_imported', row['id'], after=dict(row), source='migration')
-                db.execute('PRAGMA user_version = 1')
+        initialize_database(self.path)
 
     def _connect(self):
-        db = sqlite3.connect(self.path)
-        db.row_factory = sqlite3.Row
-        return db
+        return connect_database(self.path)
 
     @staticmethod
     def event(db, kind, task_id=None, before=None, after=None, source='user', now=None):

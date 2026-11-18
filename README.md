@@ -16,6 +16,13 @@
 
 也可以在本目录运行 `python -m studypet.web` 后打开上述地址。网页本身不需要额外 Python 依赖。
 
+## 保存个人资料
+
+[本地资料库](http://127.0.0.1:8765/library)支持 PDF、Word（.docx）、Markdown、文本与常见图片的导入、原件保存、文字提取和关键词检索。
+保留来源位置，支持文字校正、暂停检索和删除。Windows 使用本地 OCR，资料不上传云端。
+完整依赖安装 `python -m pip install -r requirements-knowledge.txt`，使用说明与格式边界见[个人资料库](docs/LIBRARY.md)。
+模型读取资料与自动提取个人记忆仍待接入。
+
 ## 项目目标
 
 - Windows 电脑运行 Agent；带屏开发板负责表情、状态显示和按键交互。
@@ -69,7 +76,7 @@ Codex app-server ── 用量 / 完成回复 ── 屏幕桥接
 
 ## 参与开发
 
-个人助理的目录、数据存储和上下文设计见 [架构规划](docs/architecture/README.md)。该规划包含待实施的 SQL 草案；当前运行库仍为 v1，新增模型能力尚未接入。
+个人助理的目录、数据存储和上下文设计见 [架构规划](docs/architecture/README.md)。当前正式库为 v2，已落地资料库与统一迁移入口，其余模型能力和草案中的其它数据表尚未接入。
 
 请先阅读 [开发路线](docs/ROADMAP.md)、[设计约定](docs/DESIGN.md)、[硬件预算](docs/HARDWARE.md) 和 [贡献指南](CONTRIBUTING.md)。版本与分支约定见 [版本管理](docs/VERSION_CONTROL.md)，历史变化见 [更新记录](CHANGELOG.md)。
 
