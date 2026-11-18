@@ -1,18 +1,20 @@
-# StudyPet USB Speaker — ESP32-S3-RLCD-4.2
+# StudyPet 扬声器与学习屏 — ESP32-S3-RLCD-4.2
 
 让 Windows 将开发板识别为普通 USB 音频输出设备，播放系统、浏览器和播放器声音。
-当前原型只实现扬声器；不包含 USB 麦克风、AI 对话、Wi-Fi 或屏幕界面。
+当前代码加入了日历、学习计划与 Codex 用量/回复摘录的屏幕桥接，不启用 USB 麦克风或 Wi-Fi。
+电脑端运行和数据来源见[屏幕开发说明](../../docs/SCREEN.md)。
 
 ## 硬件与格式
 
 - 开发板：微雪 ESP32-S3-RLCD-4.2，板载 ES8311 DAC，配套单个扬声器。
 - USB：接开发板原生 Type-C 数据口；电脑一端 USB-A 或 USB-C 均可。
-- USB 产品名称：`StudyPet USB Speaker`，USB Audio Class 2。
-  Windows 实测输出名称为 **扬声器（usb uac）**，来自乐鑫组件的音频接口描述。
+- USB 产品名称：`StudyPet Speaker + Display`，USB Audio Class 2 + CDC。
+  新版音频接口名称为 `StudyPet Speaker`；旧音响版 Windows 实测名称为 **扬声器（usb uac）**。
 - 固定 48 kHz / 16-bit / 双声道输入；固件将左右声道取平均并播放单声道。
 - Windows 音量和静音通过 USB 控制；编解码器使用完整 0–100 音量范围，初始为 40。
   最大音量对应驱动音量曲线的 0 dB，不对 PCM 额外加增益。
 - 此原型沿用乐鑫示例的 VID/PID，仅用于开发验证，量产需合法分配 USB 标识。
+  扬声器与屏幕复合版本使用 VID 303A / PID 8001，与旧音响版 PID 8000 区分。
 
 接线来自[微雪官方板级配置](https://github.com/waveshareteam/ESP32-S3-RLCD-4.2/blob/9e754fdf431ef4fce21e4e8b19bd4079ba043e86/examples/esp-idf/07_Audio_Test/components/ExternLib/codec_board/board_cfg.txt)：
 
@@ -71,7 +73,7 @@ python -m esptool --port COM3 --baud 921600 write-flash 0 factory-backup.bin
 
 ## Windows 验收
 
-1. 设置 → 系统 → 声音 → 输出，选择 **扬声器（usb uac）**。
+1. 设置 → 系统 → 声音 → 输出，选择 **StudyPet Speaker**（旧音响版为“扬声器（usb uac）”）。
 2. 先将音量调低，播放系统测试音，再播放正常人声或音乐。
 3. 左、右声道测试都应能听见；只有一个物理扬声器，无法提供空间立体声。
 4. 验证系统音量、静音、暂停后恢复、切换输出设备、重新插拔 USB。
@@ -88,6 +90,13 @@ python -m esptool --port COM3 --baud 921600 write-flash 0 factory-backup.bin
 Windows 重新识别为默认扬声器，30% 音量下音频播放调用成功；
 用户随后用音视频试听并确认：“明显变大，已经够用”。
 
+### 学习屏集成验证
+
+- 新增显示驱动、UAC+CDC 复合设备及双页帧缓存，ESP-IDF v5.5.5 编译通过。
+- 应用固件大小 333,664 字节；日历、真实 Codex 用量与最近回复摘录的电脑预览已运行。
+- Python 任务、传输格式、像素映射与回复筛选共 12 项测试通过。
+- 实体屏幕方向、KEY 翻页、USB 传图与音频并行效果待上板确认。
+
 - ESP-IDF v5.5.5 编译通过，应用固件大小 287,584 字节。
 - 烧录的 bootloader、分区表、应用均通过 esptool 数据校验。
 - Windows 成功枚举 USB Audio 输出，已设为默认控制台与多媒体输出。
@@ -97,7 +106,8 @@ Windows 重新识别为默认扬声器，30% 音量下音频播放调用成功�
 
 ## 来源与许可证
 
-本目录应用代码采用仓库 MIT 许可证。通过组件管理器使用的乐鑫组件保留其原有许可证；
+本目录自有应用代码采用仓库 MIT 许可证；`rlcd_panel.c` 改编自微雪，保留 Apache-2.0。
+启动页使用 Noto Sans SC，字体许可见 `licenses/`。通过组件管理器使用的乐鑫组件保留其原有许可证；
 USB UAC/TinyUSB 及音频组件的许可证应随二进制再分发一并提供。
 
 - [乐鑫 USB UAC 文档](https://docs.espressif.com/projects/esp-iot-solution/en/latest/usb/usb_device/usb_device_uac.html)

@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "usb_device_uac.h"
+#include "screen_bridge.h"
 
 static const char *TAG = "studypet_speaker";
 static esp_codec_dev_handle_t speaker;
@@ -147,7 +148,11 @@ void app_main(void)
         .input_cb = NULL,
         .set_mute_cb = set_usb_mute,
         .set_volume_cb = set_usb_volume,
+        .spk_itf_num = 1,
+        .mic_itf_num = -1,
     };
     ESP_ERROR_CHECK(uac_device_init(&usb_cfg));
+    esp_err_t screen_result = screen_bridge_start();
+    if (screen_result != ESP_OK) ESP_LOGE(TAG, "Screen task unavailable: %s", esp_err_to_name(screen_result));
     ESP_LOGI(TAG, "Ready: StudyPet USB Speaker, 48 kHz / 16-bit, stereo mixed to mono");
 }
