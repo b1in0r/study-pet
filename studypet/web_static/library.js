@@ -60,23 +60,96 @@ async function showDocument(id){
     if(!$('#document-dialog').open)$('#document-dialog').showModal();
   }catch(error){notify(error.message,true);}
 }
-$('#library-files').addEventListener('change',()=>{$('#selected-files').textContent=[...$('#library-files').files].map(file=>`${file.name}（${formatSize(file.size)}）`).join('、')||'尚未选择文件';});
-$('#upload-form').addEventListener('submit',async event=>{
-  event.preventDefault();if(uploading)return;uploading=true;$('#upload-button').disabled=true;$('#library-files').disabled=true;
-  const files=[...$('#library-files').files];let succeeded=0;
-  try{
-    for(let i=0;i<files.length;i++){
-      const file=files[i];$('#upload-status').textContent=`${i+1}/${files.length} · 正在本地提取 ${file.name}，请保持此页打开…`;
-      try{
-        if(!file.size||file.size>20*1024*1024)throw new Error('请选择 20 MB 以内的非空文件');
-        const result=await api(`/api/library/documents?filename=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});
-        const detail=await api(`/api/library/documents/${result.id}`);
-        succeeded++;notify(result.duplicate?'资料已存在，未重复保存':detail.state==='ready'?'资料已保存并提取文字':'原件已保存，可打开详情补充文字');
-        await loadLibrary();
-      }catch(error){notify(`${file.name}：${error.message}`,true);}
+const fileInput = $('#library-files');
+const chooseFiles = $('#choose-files');
+const uploadButton = $('#upload-button');
+const fileQueue = $('#file-queue');
+const uploadStatus = $('#upload-status');
+let pendingFiles = [];
+
+function renderFileQueue() {
+  $('#selected-files').textContent = pendingFiles.length
+    ? `待导入 ${pendingFiles.length} 份文件` : '尚未选择文件';
+  chooseFiles.querySelector('strong').textContent = pendingFiles.length ? '继续选择文件' : '选择本地文件';
+  chooseFiles.disabled = uploading;
+  uploadButton.disabled = uploading || !pendingFiles.length;
+  fileQueue.hidden = !pendingFiles.length;
+  fileQueue.replaceChildren();
+
+  pendingFiles.forEach((entry, index) => {
+    const item = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = `${entry.file.name}（${formatSize(entry.file.size)}）`;
+    if (entry.error) {
+      const error = document.createElement('small');
+      error.textContent = entry.error;
+      label.append(error);
     }
-    $('#upload-status').textContent=`已保存 ${succeeded}/${files.length} 份资料。可在详情中核对或补充提取文字。`;
-  }finally{uploading=false;$('#upload-button').disabled=false;$('#library-files').disabled=false;$('#library-files').value='';$('#selected-files').textContent='尚未选择文件';}
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'text-button';
+    remove.textContent = '移除';
+    remove.setAttribute('aria-label', `移除 ${entry.file.name}`);
+    remove.disabled = uploading;
+    remove.addEventListener('click', () => {
+      pendingFiles.splice(index, 1);
+      renderFileQueue();
+      const next = fileQueue.children[Math.min(index, pendingFiles.length - 1)]?.querySelector('button');
+      (next || chooseFiles).focus();
+    });
+    item.append(label, remove);
+    fileQueue.append(item);
+  });
+}
+
+chooseFiles.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  for (const file of fileInput.files) {
+    pendingFiles.push({file});
+  }
+  // A native file picker replaces its FileList each time it opens.
+  fileInput.value = '';
+  uploadStatus.textContent = '';
+  renderFileQueue();
+});
+
+$('#upload-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (uploading || !pendingFiles.length) return;
+  uploading = true;
+  renderFileQueue();
+  const batch = pendingFiles;
+  const failed = [];
+  let saved = 0;
+  let duplicates = 0;
+  try {
+    for (const [index, {file}] of batch.entries()) {
+      uploadStatus.textContent = `${index + 1}/${batch.length} · 正在导入 ${file.name}…`;
+      try {
+        if (!file.size || file.size > 20 * 1024 * 1024) {
+          throw new Error('请选择 20 MB 以内的非空文件');
+        }
+        const result = await api(`/api/library/documents?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/octet-stream'},
+          body: file,
+        });
+        if (result.duplicate) duplicates++;
+        else saved++;
+      } catch (error) {
+        failed.push({file, error: error.message});
+      }
+    }
+    await loadLibrary();
+    const status = [`已导入 ${saved} 份`];
+    if (duplicates) status.push(`${duplicates} 份已存在`);
+    if (failed.length) status.push(`${failed.length} 份失败，可查看原因后重试`);
+    uploadStatus.textContent = status.join('，') + '。';
+  } finally {
+    pendingFiles = failed;
+    uploading = false;
+    renderFileQueue();
+  }
 });
 $('#search-form').addEventListener('submit',event=>{event.preventDefault();loadLibrary();});
 $('#clear-search').addEventListener('click',()=>{$('#library-query').value='';loadLibrary();});

@@ -6,7 +6,24 @@
 <main class="library-workspace">
   <section class="library-intro"><div><p class="day-label">学习与成长，都有迹可循</p><h1>把重要资料留在手边</h1><p class="intro-copy">保存原件，查找内容，保留每一条信息的出处。</p></div><span class="private-label"><span class="status-dot online"></span>仅在本机保存与处理</span></section>
   <div class="library-layout">
-    <aside class="import-panel" aria-label="导入资料"><h2>添加一份资料</h2><p>简历、学习笔记、论文，或一张值得记住的截图。</p><form id="upload-form"><label class="file-picker" for="library-files"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 5h17l8 8v29H12zM29 5v10h8M24 22v12m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><strong>选择本地文件</strong><span>可一次选择多份</span><input id="library-files" type="file" multiple accept=".pdf,.docx,.md,.txt,.png,.jpg,.jpeg,.webp,.bmp" required></label><p id="selected-files" class="selected-files">尚未选择文件</p><button id="upload-button" class="primary-button" type="submit">导入资料</button><p id="upload-status" class="upload-status" role="status" aria-live="polite"></p></form><p class="format-note">PDF · Word（.docx）· Markdown · 文本 · 图片<br>每份不超过 20 MB</p><div class="library-note"><h3>资料如何成为记忆？</h3><p>先保存和提取文字，后续助手可以按需查阅。个人档案与自动记忆提取仍待接入。</p><p>图片识别的是文字，图表与照片含义尚未分析。识别后请核对内容。</p></div></aside>
+    <aside class="import-panel" aria-label="导入资料">
+      <h2>添加资料</h2>
+      <p>简历、学习笔记、论文，或一张值得记住的截图。</p>
+      <form id="upload-form">
+        <button id="choose-files" class="file-picker" type="button" aria-describedby="file-picker-hint">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 5h17l8 8v29H12zM29 5v10h8M24 22v12m-5-5 5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <strong>选择本地文件</strong>
+        </button>
+        <input id="library-files" type="file" multiple accept=".pdf,.docx,.md,.txt,.png,.jpg,.jpeg,.webp,.bmp" hidden>
+        <p id="file-picker-hint" class="selected-files">可按住 Ctrl 或 Shift 多选，也可以分几次添加。</p>
+        <p id="selected-files" class="selected-files" aria-live="polite">尚未选择文件</p>
+        <ul id="file-queue" aria-label="待导入文件" hidden></ul>
+        <button id="upload-button" class="primary-button" type="submit" disabled>导入资料</button>
+        <p id="upload-status" class="upload-status" role="status"></p>
+      </form>
+      <p class="format-note">PDF · Word（.docx）· Markdown · 文本 · 图片<br>每份不超过 20 MB</p>
+      <div class="library-note"><h3>资料如何成为记忆？</h3><p>先保存和提取文字，后续助手可以按需查阅。个人档案与自动记忆提取仍待接入。</p><p>图片识别的是文字，图表与照片含义尚未分析。识别后请核对内容。</p></div>
+    </aside>
     <section class="collection" aria-label="我的资料"><div class="collection-heading"><h2>我的资料 <span id="document-count">0</span></h2><button id="refresh-library" class="text-button">刷新列表</button></div><form id="search-form" class="library-search" role="search"><label class="sr-only" for="library-query">查找资料关键词</label><input id="library-query" maxlength="100" placeholder="搜索标题或已提取的文字"><button class="primary-button" type="submit">查找</button><button id="clear-search" class="text-button" type="button" hidden>查看全部</button></form><p id="search-label" class="search-label" role="status"></p><div id="library-error" class="inline-error" role="alert" hidden></div><div id="document-list" class="document-list"></div></section>
   </div>
 </main>
