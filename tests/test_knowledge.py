@@ -134,7 +134,7 @@ class KnowledgeTests(unittest.TestCase):
         self.assertEqual(tasks.list()[0]['id'],9)
         with closing(connect_database(path)) as db:
             self.assertEqual(db.execute('SELECT content FROM memories').fetchone()[0],'保留内容')
-            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],2)
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],3)
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
 
 

@@ -2,6 +2,7 @@ import json
 import tempfile
 import threading
 import unittest
+from contextlib import closing
 from http.client import HTTPConnection
 from pathlib import Path
 from urllib.parse import quote
@@ -113,6 +114,39 @@ class PlannerWebTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/api/library/search?q='+quote('学习规划'))[1]['results'],[])
         self.assertEqual(self.request('DELETE',f'/api/library/documents/{ident}')[0],200)
         self.assertEqual(self.request('GET','/api/library/documents')[1]['documents'],[])
+
+    def test_library_categories_scope_search_and_keep_document_sources(self):
+        connection = HTTPConnection('127.0.0.1', self.server.server_port, timeout=15)
+        with closing(connection):
+            ids = []
+            for index, category in enumerate(('undergraduate', 'uncategorized', 'graduate_research')):
+                path = f'/api/library/documents?filename=fixture-{index}.md&category={category}'
+                connection.request('POST', path, f'共同关键词 {index}'.encode(),
+                                   {'Content-Type': 'application/octet-stream'})
+                response = connection.getresponse()
+                ids.append(json.loads(response.read())['id'])
+                self.assertEqual(response.status, 201)
+
+        documents = '/api/library/documents'
+        endpoint = '/api/library/document-categories'
+        search = '/api/library/search?q=' + quote('共同关键词')
+        old = self.request('GET', f'{documents}/{ids[0]}')[1]
+        self.assertEqual(old['category'], 'undergraduate')
+        self.assertEqual(self.request('GET', f'{documents}/{ids[1]}')[1]['category'], 'uncategorized')
+        self.assertEqual(
+            self.request('PATCH', endpoint, {'document_ids': ids[:2], 'category': 'campus_recruitment'}),
+            (200, {'count': 2}),
+        )
+        results = self.request('GET', search + '&category=campus_recruitment')[1]['results']
+        self.assertEqual({result['document_id'] for result in results}, set(ids[:2]))
+        new = self.request('GET', f'{documents}/{ids[0]}')[1]
+        self.assertEqual(new['revision'], old['revision'])
+        self.assertEqual(new['chunks'], old['chunks'])
+
+        missing = '00000000-0000-0000-0000-000000000000'
+        code, _ = self.request('PATCH', endpoint, {'document_ids': [ids[0], missing], 'category': 'work'})
+        self.assertEqual(code, 400)
+        self.assertEqual(self.request('GET', f'{documents}/{ids[0]}')[1]['category'], 'campus_recruitment')
 
 
 if __name__ == '__main__':

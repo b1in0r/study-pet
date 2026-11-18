@@ -4,7 +4,7 @@
 
 - Windows 单机学习助理，Python 3.11+；网页与 CLI 共用 SQLite。
 - 现有功能：任务、手动记忆本、历史、电脑/网页提醒、USB 扬声器、实体桌历与本地资料库。
-- 正式数据库为 v2（8 张业务表），迁移入口 `studypet/storage/migrate.py`；资料格式边界见 `docs/LIBRARY.md`。
+- 正式数据库为 v3（8 张业务表），迁移入口 `studypet/storage/migrate.py`；资料格式边界见 `docs/LIBRARY.md`。
 - 模型对话、结构化个人画像与 Context Builder 尚待开发。
 - 架构规划入口：`docs/architecture/README.md`。先核对当前源码与迁移版本，再依据规划开发。
 

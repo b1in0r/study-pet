@@ -15,6 +15,13 @@ from ..storage.migrate import initialize_database
 from .extract import MAX_CHARACTERS
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+DOCUMENT_CATEGORIES = {
+    'uncategorized': '未分类',
+    'campus_recruitment': '秋招求职',
+    'graduate_research': '研究生科研',
+    'undergraduate': '本科经历',
+    'work': '工作经历',
+}
 FORMATS = {'.pdf':'application/pdf', '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
            '.md':'text/markdown', '.txt':'text/plain', '.png':'image/png', '.jpg':'image/jpeg',
            '.jpeg':'image/jpeg', '.webp':'image/webp', '.bmp':'image/bmp'}
@@ -59,7 +66,7 @@ class LibraryStore:
     def list(self):
         with closing(self._connect()) as db:
             return [dict(row) for row in db.execute('''SELECT id,title,original_name,mime_type,size_bytes,revision,
-                enabled,state,message,char_count,created_at,updated_at FROM documents WHERE state <> 'deleted'
+                enabled,state,message,char_count,created_at,updated_at,category FROM documents WHERE state <> 'deleted'
                 ORDER BY created_at DESC,id''')]
 
     def get(self, ident):
@@ -101,7 +108,9 @@ class LibraryStore:
         except (UnicodeError,ValueError):
             return {'error':'提取未完成，原件已保存，可以手动补充文字'}
 
-    def import_file(self, filename, data):
+    def import_file(self, filename, data, *, category='uncategorized'):
+        if not isinstance(category, str) or category not in DOCUMENT_CATEGORIES:
+            raise ValueError('请选择有效的资料分类')
         if not isinstance(filename,str) or not filename.strip() or len(filename)>200 or any(c in filename for c in '/\\\x00\r\n'):
             raise ValueError('文件名无效，请直接选择本地文件')
         suffix = Path(filename).suffix.lower()
@@ -122,8 +131,8 @@ class LibraryStore:
             try:
                 path.write_bytes(data)
                 db.execute('''INSERT INTO documents(id,title,original_name,mime_type,storage_relpath,content_sha256,
-                    size_bytes,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'importing',?,?)''',
-                    (ident,Path(filename).stem,filename,FORMATS[suffix],relative.as_posix(),digest,len(data),now,now))
+                    size_bytes,state,created_at,updated_at,category) VALUES(?,?,?,?,?,?,?,'importing',?,?,?)''',
+                    (ident,Path(filename).stem,filename,FORMATS[suffix],relative.as_posix(),digest,len(data),now,now,category))
             except Exception:
                 path.unlink(missing_ok=True)
                 raise
@@ -210,23 +219,43 @@ class LibraryStore:
             with closing(self._connect()) as db, db:
                 db.execute("UPDATE documents SET state='deleted',title='已移除资料',original_name='',storage_relpath='',message='' WHERE id=?",(ident,))
 
-    def search(self, query):
+    def set_category(self, document_ids, category):
+        if not isinstance(category, str) or category not in DOCUMENT_CATEGORIES:
+            raise ValueError('请选择有效的资料分类')
+        if (not isinstance(document_ids, list) or not 1 <= len(document_ids) <= 500
+                or any(not isinstance(ident, str) or len(ident) != 36 for ident in document_ids)):
+            raise ValueError('请勾选 1 到 500 份资料')
+        ids = list(dict.fromkeys(document_ids))
+        placeholders = ','.join('?' for _ in ids)
+        with self.lock, closing(self._connect()) as db, db:
+            result = db.execute(f"""UPDATE documents SET category=?
+                WHERE state <> 'deleted' AND id IN ({placeholders})""", (category, *ids))
+            if result.rowcount != len(ids):
+                raise ValueError('部分资料已移除，请刷新列表后重试')
+        return len(ids)
+
+    def search(self, query, *, category=None):
         if not isinstance(query,str) or not 0<len(query.strip())<=100:
             raise ValueError('请输入 1–100 字的关键词')
         query = query.strip()
+        if category is not None and (not isinstance(category, str) or category not in DOCUMENT_CATEGORIES):
+            raise ValueError('请选择有效的资料分类')
+        category_filter = '' if category is None else 'AND d.category=?'
+        params = (query, query) if category is None else (query, query, category)
         with closing(self._connect()) as db:
-            rows = db.execute('''SELECT c.*,d.title,d.original_name FROM document_chunks c
+            rows = db.execute(f'''SELECT c.*,d.title,d.original_name,d.category FROM document_chunks c
                 JOIN documents d ON d.id=c.document_id AND d.revision=c.document_revision
                 JOIN sources s ON s.id=c.source_id
                 WHERE d.state='ready' AND d.enabled=1 AND s.state='active' AND s.source_version=CAST(d.revision AS TEXT)
                 AND (instr(lower(c.text_content),lower(?))>0 OR instr(lower(d.title),lower(?))>0)
-                ORDER BY d.updated_at DESC,c.ordinal LIMIT 20''',(query,query)).fetchall()
+                {category_filter}
+                ORDER BY d.updated_at DESC,c.ordinal LIMIT 20''',params).fetchall()
         results = []
         for row in rows:
             text = row['text_content']; offset = max(0,text.lower().find(query.lower())-80)
             results.append({'document_id':row['document_id'],'title':row['title'],'source_id':row['source_id'],
                 'revision':row['document_revision'],'locator':json.loads(row['locator_json']),
-                'text':text[offset:offset+350]})
+                'text':text[offset:offset+350],'category':row['category']})
         return results
 
     def recover_incomplete(self):

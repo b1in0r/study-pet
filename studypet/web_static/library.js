@@ -3,6 +3,15 @@ const $=selector=>document.querySelector(selector);
 const states={importing:'正在提取',ready:'可检索',needs_text:'待补充文字',failed:'待处理'};
 const dates=new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'short',day:'numeric',timeZone:'Asia/Shanghai'});
 let currentDocument=null,toastTimer,uploading=false;
+const categoryFilter = $('#category-filter');
+const uploadCategory = $('#upload-category');
+const targetCategory = $('#target-category');
+const selectedDocuments = new Set();
+let categories = {};
+let visibleDocuments = [];
+let managingCategories = false;
+let savingCategories = false;
+let libraryRequest = 0;
 async function api(url,options={}){
   const response=await fetch(url,{cache:'no-store',...options});
   const data=await response.json();
@@ -19,34 +28,127 @@ function documentRow(document,result=null){
   const content=window.document.createElement('div');
   const title=window.document.createElement('button');title.className='document-title';title.textContent=document.title;title.addEventListener('click',()=>showDocument(document.id));
   const meta=window.document.createElement('p');meta.className='document-description';
-  meta.textContent=result?locationLabel(result.locator):`${formatSize(document.size_bytes)} · ${dates.format(new Date(document.created_at))} · ${document.char_count.toLocaleString()} 字`;
+  const category = categories[document.category] || '未分类';
+  meta.textContent = result
+    ? `${category} · ${locationLabel(result.locator)}`
+    : `${category} · ${formatSize(document.size_bytes)} · ${dates.format(new Date(document.created_at))} · ${document.char_count.toLocaleString()} 字`;
   content.append(title,meta);
   if(result){const excerpt=window.document.createElement('p');excerpt.className='document-excerpt';excerpt.textContent=result.text;content.append(excerpt);}
   else if(document.message){const note=window.document.createElement('p');note.className='document-description';note.textContent=document.message;content.append(note);}
   const status=window.document.createElement('span');status.className='document-state';status.classList.toggle('attention',document.state!=='ready');status.textContent=result?'来源片段':!document.enabled?'已暂停检索':states[document.state]||document.state;
-  row.append(badge,content,status);return row;
+  const marker = window.document.createElement('div');
+  marker.className = 'document-marker';
+  marker.append(badge);
+  if (managingCategories && !result) {
+    const checkbox = window.document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = document.id;
+    checkbox.checked = selectedDocuments.has(document.id);
+    checkbox.setAttribute('aria-label', `选择 ${document.original_name}`);
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedDocuments.add(document.id);
+      else selectedDocuments.delete(document.id);
+      updateCategoryControls();
+    });
+    marker.append(checkbox);
+  }
+  row.append(marker,content,status);return row;
+}
+
+function setCategoryOptions(select, firstOption) {
+  const previous = select.value;
+  select.replaceChildren();
+  if (firstOption) select.add(new Option(firstOption, ''));
+  for (const [key, label] of Object.entries(categories)) {
+    select.add(new Option(label, key));
+  }
+  if (Array.from(select.options).some(option => option.value === previous)) {
+    select.value = previous;
+  }
+}
+
+function updateCategoryControls() {
+  const button = $('#manage-categories');
+  button.hidden = !visibleDocuments.length;
+  button.textContent = managingCategories ? '完成选择' : '批量分类';
+  button.setAttribute('aria-pressed', String(managingCategories));
+  button.disabled = savingCategories;
+  $('#category-form').hidden = !managingCategories;
+  const selectAll = $('#select-visible-documents');
+  selectAll.checked = visibleDocuments.length > 0 && selectedDocuments.size === visibleDocuments.length;
+  selectAll.indeterminate = selectedDocuments.size > 0 && !selectAll.checked;
+  selectAll.disabled = savingCategories;
+  $('#selected-document-count').textContent = `已选 ${selectedDocuments.size} 份`;
+  $('#apply-category').disabled = savingCategories || !selectedDocuments.size || !targetCategory.value;
+  targetCategory.disabled = savingCategories;
+  for (const checkbox of document.querySelectorAll('.document-marker input')) {
+    checkbox.checked = selectedDocuments.has(checkbox.value);
+    checkbox.disabled = savingCategories;
+  }
+}
+
+function renderDocumentList() {
+  const list = $('#document-list');
+  list.replaceChildren(...visibleDocuments.map(item => documentRow(item)));
+  if (!visibleDocuments.length) {
+    list.append(categoryFilter.value
+      ? empty('这个分类还没有资料', '导入时选择该分类，或将已有资料归入此类。')
+      : empty('从一份重要资料开始', '导入简历、学习笔记或截图，之后可以通过关键词找回内容。'));
+  }
+  updateCategoryControls();
 }
 async function loadLibrary(){
+  const request = ++libraryRequest;
+  const query = $('#library-query').value.trim();
+  const category = categoryFilter.value;
   try{
     $('#library-error').hidden=true;
-    const data=await api('/api/library/documents');$('#document-count').textContent=data.documents.length;
-    const query=$('#library-query').value.trim();const list=$('#document-list');
-    if(query){
-      const results=await api(`/api/library/search?q=${encodeURIComponent(query)}`);
-      list.replaceChildren();$('#search-label').textContent=`“${query}” · ${results.results.length} 条匹配片段，最多展示 20 条`;$('#clear-search').hidden=false;
-      for(const result of results.results){const document=data.documents.find(item=>item.id===result.document_id);if(document)list.append(documentRow(document,result));}
-      if(!results.results.length)list.append(empty('还没有找到相关文字','换一个关键词，或检查资料是否已提取文字并开启检索。'));
-    }else{
-      list.replaceChildren();$('#search-label').textContent='原件和提取文字均保存在这台电脑。';$('#clear-search').hidden=true;
-      for(const document of data.documents)list.append(documentRow(document));
-      if(!data.documents.length)list.append(empty('从一份重要资料开始','导入简历、学习笔记或截图，之后可以通过关键词找回内容。'));
+    const data = await api('/api/library/documents');
+    if (request !== libraryRequest) return;
+    if (!Object.keys(categories).length && data.categories) {
+      categories = data.categories;
+      setCategoryOptions(categoryFilter, '全部分类');
+      setCategoryOptions(uploadCategory);
+      setCategoryOptions(targetCategory, '选择目标分类');
     }
-  }catch(error){$('#library-error').textContent=error.message;$('#library-error').hidden=false;}
+    const matchingDocuments = category
+      ? data.documents.filter(item => item.category === category)
+      : data.documents;
+    $('#document-count').textContent = matchingDocuments.length;
+    const list = $('#document-list');
+    if(query){
+      const params = new URLSearchParams({q: query});
+      if (category) params.set('category', category);
+      const results = await api(`/api/library/search?${params}`);
+      if (request !== libraryRequest) return;
+      visibleDocuments = [];
+      selectedDocuments.clear();
+      managingCategories = false;
+      list.replaceChildren();$('#search-label').textContent=`“${query}” · ${results.results.length} 条匹配片段，最多展示 20 条`;$('#clear-search').hidden=false;
+      for(const result of results.results){const document=matchingDocuments.find(item=>item.id===result.document_id);if(document)list.append(documentRow(document,result));}
+      if(!results.results.length)list.append(empty('还没有找到相关文字','换一个关键词，或检查资料是否已提取文字并开启检索。'));
+      updateCategoryControls();
+    }else{
+      visibleDocuments = matchingDocuments;
+      const visibleIds = new Set(visibleDocuments.map(item => item.id));
+      for (const id of selectedDocuments) {
+        if (!visibleIds.has(id)) selectedDocuments.delete(id);
+      }
+      if (!visibleDocuments.length) managingCategories = false;
+      $('#search-label').textContent = category ? categories[category] : '原件和提取文字均保存在这台电脑。';
+      $('#clear-search').hidden = true;
+      renderDocumentList();
+    }
+  }catch(error){
+    if (request !== libraryRequest) return;
+    $('#library-error').textContent=error.message;$('#library-error').hidden=false;
+  }
 }
 async function showDocument(id){
   try{
     const data=await api(`/api/library/documents/${id}`);currentDocument=data;
-    $('#document-heading').textContent=data.title;$('#document-format').textContent=data.original_name;
+    $('#document-heading').textContent=data.title;
+    $('#document-format').textContent=`${categories[data.category] || '未分类'} · ${data.original_name}`;
     $('#document-message').textContent=data.message||'文字已提取，引用保留原始位置。';
     $('#download-document').href=`/api/library/documents/${id}/original`;
     $('#document-enabled').checked=Boolean(data.enabled);
@@ -72,6 +174,7 @@ function renderFileQueue() {
     ? `待导入 ${pendingFiles.length} 份文件` : '尚未选择文件';
   chooseFiles.querySelector('strong').textContent = pendingFiles.length ? '继续选择文件' : '选择本地文件';
   chooseFiles.disabled = uploading;
+  uploadCategory.disabled = uploading;
   uploadButton.disabled = uploading || !pendingFiles.length;
   fileQueue.hidden = !pendingFiles.length;
   fileQueue.replaceChildren();
@@ -119,6 +222,7 @@ $('#upload-form').addEventListener('submit', async event => {
   uploading = true;
   renderFileQueue();
   const batch = pendingFiles;
+  const category = uploadCategory.value;
   const failed = [];
   let saved = 0;
   let duplicates = 0;
@@ -129,7 +233,8 @@ $('#upload-form').addEventListener('submit', async event => {
         if (!file.size || file.size > 20 * 1024 * 1024) {
           throw new Error('请选择 20 MB 以内的非空文件');
         }
-        const result = await api(`/api/library/documents?filename=${encodeURIComponent(file.name)}`, {
+        const params = new URLSearchParams({filename: file.name, category});
+        const result = await api(`/api/library/documents?${params}`, {
           method: 'POST',
           headers: {'Content-Type': 'application/octet-stream'},
           body: file,
@@ -154,6 +259,48 @@ $('#upload-form').addEventListener('submit', async event => {
 $('#search-form').addEventListener('submit',event=>{event.preventDefault();loadLibrary();});
 $('#clear-search').addEventListener('click',()=>{$('#library-query').value='';loadLibrary();});
 $('#refresh-library').addEventListener('click',loadLibrary);
+categoryFilter.addEventListener('change', () => {
+  selectedDocuments.clear();
+  updateCategoryControls();
+  loadLibrary();
+});
+$('#manage-categories').addEventListener('click', () => {
+  managingCategories = !managingCategories;
+  selectedDocuments.clear();
+  targetCategory.value = '';
+  renderDocumentList();
+});
+$('#select-visible-documents').addEventListener('change', event => {
+  selectedDocuments.clear();
+  if (event.target.checked) {
+    for (const item of visibleDocuments) selectedDocuments.add(item.id);
+  }
+  updateCategoryControls();
+});
+targetCategory.addEventListener('change', updateCategoryControls);
+$('#category-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (savingCategories || !selectedDocuments.size || !targetCategory.value) return;
+  savingCategories = true;
+  updateCategoryControls();
+  const category = targetCategory.value;
+  try {
+    const {count} = await api('/api/library/document-categories', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({document_ids: [...selectedDocuments], category}),
+    });
+    selectedDocuments.clear();
+    targetCategory.value = '';
+    await loadLibrary();
+    notify(`已将 ${count} 份资料归入「${categories[category]}」`);
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    savingCategories = false;
+    updateCategoryControls();
+  }
+});
 $('#close-document').addEventListener('click',()=>$('#document-dialog').close());
 $('#document-enabled').addEventListener('change',async()=>{
   if(!currentDocument)return;const checkbox=$('#document-enabled');checkbox.disabled=true;

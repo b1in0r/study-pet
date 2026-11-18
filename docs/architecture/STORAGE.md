@@ -1,6 +1,6 @@
 # 数据存储设计
 
-状态：演进设计。当前正式 v2 已实现 documents、document_chunks、sources 及统一迁移；其余助理表待实施。本目录 SQL 为从早期 v1 出发的参考草案，不被应用加载，不可对当前库执行；已实现的表以正式 migrations 和 [资料库说明](../LIBRARY.md) 为准。
+当前正式版本为 v3，资料库的 documents、document_chunks 和 sources 已通过正式迁移建立。v3 增加 documents.category。本目录 SQL 是早期 v1 的参考草案，运行数据库以正式迁移和 [资料库说明](../LIBRARY.md) 为准。
 
 ## 1. 文件、数据库与配置
 

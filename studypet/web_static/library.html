@@ -18,13 +18,42 @@
         <p id="file-picker-hint" class="selected-files">可按住 Ctrl 或 Shift 多选，也可以分几次添加。</p>
         <p id="selected-files" class="selected-files" aria-live="polite">尚未选择文件</p>
         <ul id="file-queue" aria-label="待导入文件" hidden></ul>
+        <label class="category-field" for="upload-category">导入到分类
+          <select id="upload-category"><option value="uncategorized">未分类</option></select>
+        </label>
         <button id="upload-button" class="primary-button" type="submit" disabled>导入资料</button>
         <p id="upload-status" class="upload-status" role="status"></p>
       </form>
       <p class="format-note">PDF · Word（.docx）· Markdown · 文本 · 图片<br>每份不超过 20 MB</p>
       <div class="library-note"><h3>资料如何成为记忆？</h3><p>先保存和提取文字，后续助手可以按需查阅。个人档案与自动记忆提取仍待接入。</p><p>图片识别的是文字，图表与照片含义尚未分析。识别后请核对内容。</p></div>
     </aside>
-    <section class="collection" aria-label="我的资料"><div class="collection-heading"><h2>我的资料 <span id="document-count">0</span></h2><button id="refresh-library" class="text-button">刷新列表</button></div><form id="search-form" class="library-search" role="search"><label class="sr-only" for="library-query">查找资料关键词</label><input id="library-query" maxlength="100" placeholder="搜索标题或已提取的文字"><button class="primary-button" type="submit">查找</button><button id="clear-search" class="text-button" type="button" hidden>查看全部</button></form><p id="search-label" class="search-label" role="status"></p><div id="library-error" class="inline-error" role="alert" hidden></div><div id="document-list" class="document-list"></div></section>
+    <section class="collection" aria-label="我的资料">
+      <div class="collection-heading">
+        <h2>我的资料 <span id="document-count">0</span></h2>
+        <div class="collection-actions">
+          <button id="manage-categories" class="text-button" type="button" aria-pressed="false" hidden>批量分类</button>
+          <button id="refresh-library" class="text-button" type="button">刷新列表</button>
+        </div>
+      </div>
+      <form id="search-form" class="library-search" role="search">
+        <label class="sr-only" for="category-filter">按分类筛选</label>
+        <select id="category-filter"><option value="">全部分类</option></select>
+        <label class="sr-only" for="library-query">查找资料关键词</label>
+        <input id="library-query" maxlength="100" placeholder="搜索标题或已提取的文字">
+        <button class="primary-button" type="submit">查找</button>
+        <button id="clear-search" class="text-button" type="button" hidden>清除关键词</button>
+      </form>
+      <form id="category-form" class="category-actions" hidden>
+        <label class="select-all"><input id="select-visible-documents" type="checkbox"> 全选当前列表</label>
+        <span id="selected-document-count" aria-live="polite">已选 0 份</span>
+        <label class="sr-only" for="target-category">目标分类</label>
+        <select id="target-category" required><option value="">选择目标分类</option></select>
+        <button id="apply-category" class="primary-button" type="submit" disabled>应用分类</button>
+      </form>
+      <p id="search-label" class="search-label" role="status"></p>
+      <div id="library-error" class="inline-error" role="alert" hidden></div>
+      <div id="document-list" class="document-list"></div>
+    </section>
   </div>
 </main>
 <dialog id="document-dialog" class="document-dialog" aria-labelledby="document-heading"><div class="dialog-heading"><div><p id="document-format" class="day-label"></p><h2 id="document-heading"></h2></div><button id="close-document" class="icon-button" aria-label="关闭资料详情">×</button></div><p id="document-message" class="dialog-note"></p><div class="document-toolbar"><a id="download-document" class="secondary-button" download>下载原件</a><label class="retrieval-toggle"><input id="document-enabled" type="checkbox">允许在资料库中检索</label><button id="edit-transcript" class="text-button">补充／校正文字</button></div><img id="document-image" class="document-image" alt="资料原图" hidden><div id="document-content" class="document-content"></div><form id="transcript-form" hidden><label for="transcript-text">校正后的文字</label><p class="dialog-note">保存后使用这份文字检索，原件保留。引用位置将改为行号。</p><textarea id="transcript-text" rows="12" maxlength="300000"></textarea><div class="dialog-actions"><button id="cancel-transcript" class="secondary-button" type="button">取消</button><button id="save-transcript" class="primary-button" type="submit">保存文字</button></div></form><div class="document-footer"><span id="document-meta"></span><button id="delete-document" class="text-button delete-document">删除资料</button></div></dialog>

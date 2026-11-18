@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlsplit, quote
 from .tasks import TaskStore
 from .agent import AgentStore, ReminderEngine
 from .notifications import DesktopNotifier
-from .knowledge.library import LibraryStore, MAX_UPLOAD_BYTES
+from .knowledge.library import DOCUMENT_CATEGORIES, LibraryStore, MAX_UPLOAD_BYTES
 
 SHANGHAI = timezone(timedelta(hours=8), 'Asia/Shanghai')
 STATIC = Path(__file__).with_name('web_static')
@@ -76,9 +76,11 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 try:
                     document_match = re.fullmatch(r'/api/library/documents/([0-9a-f-]{36})(/original|/preview)?',parsed.path)
                     if parsed.path == '/api/library/documents':
-                        self.respond(200,{'documents':library.list()})
+                        self.respond(200,{'documents':library.list(),'categories':DOCUMENT_CATEGORIES})
                     elif parsed.path == '/api/library/search':
-                        self.respond(200,{'results':library.search(parse_qs(parsed.query).get('q',[''])[0])})
+                        query = parse_qs(parsed.query)
+                        category = query.get('category',[None])[0]
+                        self.respond(200,{'results':library.search(query.get('q',[''])[0],category=category)})
                     elif document_match and document_match[2]:
                         file,document = library.original(document_match[1])
                         if document_match[2] == '/preview':
@@ -199,11 +201,13 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                     if not 0 < length <= MAX_UPLOAD_BYTES:
                         self.respond(413,{'error':'请选择 20 MB 以内的非空文件'})
                         return
-                    filename=parse_qs(urlsplit(self.path).query).get('filename',[''])[0]
+                    query = parse_qs(urlsplit(self.path).query)
+                    filename = query.get('filename',[''])[0]
+                    category = query.get('category',['uncategorized'])[0]
                     data=self.rfile.read(length)
                     if len(data) != length:
                         raise ValueError('上传未完成，请重试')
-                    self.respond(201,library.import_file(filename,data))
+                    self.respond(201,library.import_file(filename,data,category=category))
                     return
                 if self.headers.get('Content-Type', '').split(';')[0].strip() != 'application/json':
                     self.respond(415, {'error': '请使用 JSON 格式'})
@@ -215,6 +219,10 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('计划格式不正确')
+                if self.command == 'PATCH' and path == '/api/library/document-categories':
+                    count = library.set_category(body.get('document_ids'),body.get('category'))
+                    self.respond(200,{'count':count})
+                    return
                 if self.command == 'PATCH' and document_match:
                     library.update(document_match[1],body)
                     self.respond(200,{'ok':True})
