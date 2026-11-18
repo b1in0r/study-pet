@@ -17,4 +17,7 @@ private-data/
 Thumbs.db
 dist/
 build/
+managed_components/
+sdkconfig
+sdkconfig.old
 *.egg-info/
