@@ -26,6 +26,13 @@ class JournalStore:
                 ORDER BY day DESC,created_at DESC,id DESC LIMIT ?
             ''', params)]
 
+    def for_day(self, day, limit=10):
+        with closing(connect_database(self.path)) as db:
+            return [dict(row) for row in db.execute('''
+                SELECT id,body FROM journal_entries WHERE day=?
+                ORDER BY created_at DESC,id DESC LIMIT ?
+            ''', (day.isoformat(), limit))]
+
     def save(self, day, body, ident=None):
         try:
             if date.fromisoformat(day).isoformat() != day:

@@ -4,11 +4,13 @@ import threading
 import unittest
 from unittest.mock import patch
 from contextlib import closing
+from datetime import date, timedelta
 from http.client import HTTPConnection
 from pathlib import Path
 from urllib.parse import quote
 
 from studypet.tasks import TaskStore
+from studypet.local_ai import LocalAIError
 from studypet.web import create_server
 
 
@@ -194,6 +196,51 @@ class PlannerWebTests(unittest.TestCase):
         self.assertEqual(TaskStore(self.db).list(), [])
         self.assertEqual(self.request('DELETE', path)[0], 200)
         self.assertEqual(self.request('GET', '/api/journal')[1]['entries'], [])
+
+    def test_daily_review_uses_today_records_and_reschedules_only_on_confirmation(self):
+        today = date.fromisoformat(self.request('GET', '/api/journal')[1]['today'])
+        tomorrow = (today + timedelta(days=1)).isoformat()
+        yesterday = (today - timedelta(days=1)).isoformat()
+        self.request('POST', '/api/journal', {'day': yesterday, 'body': '昨天的测试日记'})
+        self.request('POST', '/api/journal', {'day': today.isoformat(), 'body': '今天整理了实验数据'})
+        finished = self.add('今天完成的跨日事项', day=yesterday)
+        self.request('PATCH', f'/api/tasks/{finished}', {'status': 'done'})
+        pending = self.add('补写论文结果部分', day=today.isoformat())
+        original = TaskStore(self.db).list()
+
+        with patch('studypet.local_ai.Ollama.generate', side_effect=LocalAIError('测试无模型')):
+            code, review = self.request('POST', '/api/review/today', {})
+        self.assertEqual(code, 200)
+        self.assertEqual(review['mode'], 'records')
+        self.assertEqual(review['journal'], ['今天整理了实验数据'])
+        self.assertEqual(review['completed'], ['今天完成的跨日事项'])
+        self.assertEqual(review['suggestion']['existing']['id'], pending)
+        self.assertTrue(review['question'])
+        self.assertEqual(TaskStore(self.db).list(), original)
+
+        with patch('studypet.local_ai.Ollama.generate') as generate:
+            generate.return_value = {'progress': '实验数据已经整理。', 'task_title': '补写论文结果部分',
+                                     'reason': '今天完成了数据整理。', 'task_ref': f'T{pending}'}
+            code, review = self.request('POST', '/api/review/today', {'minutes': 90})
+        self.assertEqual(code, 200)
+        self.assertEqual(review['mode'], 'model')
+        self.assertEqual(generate.call_args.args[1]['明天预计可用分钟'], 90)
+        self.assertEqual(review['tomorrow'], tomorrow)
+        draft = {'title': review['suggestion']['title'], 'date': tomorrow, 'time': '20:00',
+                 'revision': review['suggestion']['existing']['revision']}
+        self.assertEqual(self.request('PATCH', f'/api/tasks/{pending}', draft)[0], 200)
+        self.assertEqual(self.request('PATCH', f'/api/tasks/{pending}', draft)[0], 400)
+        tasks = self.request('GET', f'/api/tasks?date={tomorrow}')[1]['tasks']
+        self.assertEqual([task['id'] for task in tasks], [pending])
+
+        with patch('studypet.local_ai.Ollama.generate', return_value={
+            'task_title': '今天完成的跨日事项', 'task_ref': f'T{pending}',
+            'reason': '重新安排已完成事项', 'question': '今天进展如何？',
+        }):
+            _, review = self.request('POST', '/api/review/today', {'minutes': 90})
+        self.assertEqual(review['suggestion']['title'], '补写论文结果部分')
+        self.assertEqual(review['suggestion']['existing']['id'], pending)
+        self.assertFalse(review['question'])
 
 
 if __name__ == '__main__':

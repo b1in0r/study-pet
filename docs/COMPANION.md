@@ -4,6 +4,8 @@
 
 「问助理」使用个人档案、近期任务和关键词检索到的资料片段。勾选「本次参考近一周日记」后才会读取最近七天内的最多五篇日记。每个回答列出模型选用的来源。若出现「保存为计划」，确认日期和时间后才会保存。当前对话只留在页面内。
 
+在快速日记点「复盘今天」，可查看当天日记、按实际完成时间统计的任务，以及今天和明天的待办。填写明天可用分钟数后，本地模型可以据此生成建议。模型未就绪时会显示原记录和按时间选出的待办。填写提醒时间并确认后，已有待办会调整到明天，新的建议会添加到明天的计划。
+
 ## 初次准备
 
 使用启动脚本所选的同一个 Python 环境，在项目根目录执行以下命令。首次下载模型需要联网。
@@ -14,4 +16,4 @@ python -c "from faster_whisper.utils import download_model; download_model('smal
 ollama pull qwen3:4b
 ```
 
-语音识别使用已下载的 [Faster Whisper](https://github.com/SYSTRAN/faster-whisper) 模型。文字助理使用 [Ollama 的本机聊天接口](https://docs.ollama.com/api/chat)。点击发送时，StudyPet 会检查本机 Ollama，必要时启动它。若本机只有 `qwen3:0.6b`，也可以回答。模型未就绪时显示本地资料概览。录音仅在转写过程中处理，数据库保存确认后的文字。两个页面都可以通过原来的启动脚本进入。
+语音识别使用已下载的 [Faster Whisper](https://github.com/SYSTRAN/faster-whisper) 模型。文字助理使用 [Ollama 的本机聊天接口](https://docs.ollama.com/api/chat)。点击发送时，StudyPet 会检查本机 Ollama，必要时启动它。本机只安装 `qwen3:0.6b` 或 `qwen2.5:0.5b` 时，也可以生成简单回答。模型未就绪时显示本地资料概览。录音仅在转写过程中处理，数据库保存确认后的文字。两个页面都可以通过原来的启动脚本进入。

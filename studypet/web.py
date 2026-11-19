@@ -17,6 +17,7 @@ from .profile import PROFILE_KINDS, ProfileStore
 from .journal import JournalStore
 from .local_ai import LocalAIError, MAX_AUDIO_BYTES, Ollama, Transcriber
 from .assistant import answer
+from .review import review_today
 from .knowledge.library import DOCUMENT_CATEGORIES, LibraryStore, MAX_UPLOAD_BYTES
 
 SHANGHAI = timezone(timedelta(hours=8), 'Asia/Shanghai')
@@ -271,6 +272,9 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 if self.command == 'POST' and path == '/api/assistant':
                     self.respond(200, answer(body, model, store, profile, library, journal))
                     return
+                if self.command == 'POST' and path == '/api/review/today':
+                    self.respond(200, review_today(body, store, journal, model))
+                    return
                 if self.command == 'POST' and path == '/api/journal':
                     self.respond(201, {'id': journal.save(body.get('day'), body.get('body'))})
                     return
@@ -320,6 +324,10 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                         updates['title'], updates['due_at'] = task_fields(body)
                     if 'status' in body:
                         updates['status'] = body['status']
+                    if 'revision' in body:
+                        if type(body['revision']) is not int or body['revision'] < 1:
+                            raise ValueError('计划版本无效，请刷新')
+                        updates['expected_revision'] = body['revision']
                     store.update(int(match[1]), **updates)
                     self.respond(200, {'ok': True})
                 else:

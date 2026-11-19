@@ -9,7 +9,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-OLLAMA_MODELS = ('qwen3:4b', 'qwen3:0.6b')
+OLLAMA_MODELS = ('qwen3:4b', 'qwen3:0.6b', 'qwen2.5:0.5b')
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 
 
@@ -58,14 +58,15 @@ class Ollama:
                         time.sleep(0.2)
                 raise LocalAIError('本地模型服务未能启动，请检查 Ollama。')
 
-    def generate(self, instruction, content):
+    def generate(self, instruction, content, *, output_schema='json'):
         names = {model.get('name') for model in self.available_models()}
         model = next((name for name in OLLAMA_MODELS if name in names), None)
         if model is None:
             raise LocalAIError('本机还没有助理所需的 Ollama 模型。')
         try:
             result = self.request('/api/chat', {
-                'model': model, 'stream': False, 'think': False, 'format': 'json',
+                'model': model, 'stream': False, 'format': output_schema,
+                **({'think': False} if model.startswith('qwen3:') else {}),
                 'messages': [{'role': 'system', 'content': instruction},
                              {'role': 'user', 'content': json.dumps(content, ensure_ascii=False)}],
                 'options': {'num_ctx': 8192, 'num_predict': 850, 'temperature': 0.2},

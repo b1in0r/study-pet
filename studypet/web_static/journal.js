@@ -221,3 +221,109 @@ window.addEventListener('pageshow', () => {
   refreshControls();
 });
 load().catch(error => status(error.message, true));
+
+const reviewForm = $('#review-form');
+const reviewPlan = $('#review-plan');
+const reviewStart = $('#review-start');
+const reviewSave = $('#review-save');
+let currentReview;
+
+function reviewStatus(message, error = false) {
+  const element = $('#review-status');
+  element.textContent = message;
+  element.classList.toggle('error', error);
+}
+
+function reviewText(container, tag, text) {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  container.append(element);
+  return element;
+}
+
+function reviewList(container, title, values) {
+  if (!values.length) return;
+  reviewText(container, 'h3', title);
+  const list = document.createElement('ul');
+  list.className = 'review-facts';
+  for (const item of values) reviewText(list, 'li', item);
+  container.append(list);
+}
+
+function showReview(data) {
+  currentReview = data;
+  const progress = $('#review-progress');
+  progress.replaceChildren();
+  if (data.progress) {
+    reviewText(progress, 'h3', 'AI 复盘草稿');
+    reviewText(progress, 'p', data.progress);
+  }
+  reviewList(progress, '今天的日记', data.journal);
+  reviewList(progress, '今天完成', data.completed);
+  reviewList(progress, '今天和明天的待办',
+    data.pending.map(task => `${task.due_day === data.day ? '今天' : '明天'} · ${task.title}`));
+  if (!progress.children.length) reviewText(progress, 'p', '今天还没有可复盘的日记或任务记录。');
+  if (data.more) reviewText(progress, 'p', '这里只显示部分记录，完整内容可在日记和计划中查看。');
+
+  const next = $('#review-next');
+  next.replaceChildren();
+  if (data.suggestion) {
+    reviewText(next, 'h3', `明天优先做 · ${data.suggestion.title}`);
+    reviewText(next, 'p', data.suggestion.reason);
+  }
+  if (data.question) reviewText(next, 'p', data.question);
+  next.hidden = !next.children.length;
+
+  $('#review-plan-date').textContent = `明日计划 · ${data.tomorrow}`;
+  $('#review-plan-mode').textContent = data.suggestion?.existing
+    ? '确认后更新这条已有计划的时间。' : '确认后添加一条明日计划。';
+  $('#review-plan-title').value = data.suggestion?.title || '';
+  $('#review-plan-time').value = '';
+  reviewPlan.hidden = false;
+  $('#review-results').hidden = false;
+}
+
+reviewForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  reviewStart.disabled = true;
+  currentReview = null;
+  $('#review-results').hidden = true;
+  reviewStatus('正在整理今天已经保存的记录…');
+  try {
+    const minutes = $('#review-minutes').valueAsNumber;
+    const result = await request('/api/review/today', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({minutes: Number.isNaN(minutes) ? null : minutes}),
+    });
+    showReview(result);
+    reviewStatus(result.mode === 'model' ? '复盘已生成。' : '已按本地记录整理。');
+  } catch (error) {
+    reviewStatus(error.message, true);
+  } finally {
+    reviewStart.disabled = false;
+  }
+});
+
+reviewPlan.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!currentReview || reviewSave.disabled) return;
+  const draft = currentReview;
+  const existing = draft.suggestion?.existing;
+  reviewSave.disabled = true;
+  reviewStart.disabled = true;
+  try {
+    await request(existing ? `/api/tasks/${existing.id}` : '/api/tasks', {
+      method: existing ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title: $('#review-plan-title').value, date: draft.tomorrow,
+                            time: $('#review-plan-time').value, revision: existing?.revision}),
+    });
+    currentReview = null;
+    reviewPlan.hidden = true;
+    reviewStatus('明日计划已保存。');
+  } catch (error) {
+    reviewStatus(error.message, true);
+  } finally {
+    reviewSave.disabled = false;
+    reviewStart.disabled = false;
+  }
+});

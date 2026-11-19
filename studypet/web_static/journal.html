@@ -33,6 +33,32 @@
       </div>
       <p id="journal-status" class="companion-status" role="status"></p>
     </form>
+    <section class="journal-timeline daily-review" aria-labelledby="review-heading">
+      <h2 id="review-heading">晚间复盘</h2>
+      <form id="review-form" class="companion-actions">
+        <label for="review-minutes">明天可用时间
+          <input id="review-minutes" type="number" min="1" max="1440" step="1" placeholder="选填">
+          分钟
+        </label>
+        <button id="review-start" type="submit" class="secondary-button">复盘今天</button>
+      </form>
+      <p id="review-status" class="companion-status" role="status"></p>
+      <div id="review-results" hidden>
+        <div id="review-progress" class="companion-entry"></div>
+        <div id="review-next" class="companion-entry"></div>
+        <form id="review-plan" class="companion-form">
+          <h3 id="review-plan-date">明日计划</h3>
+          <p id="review-plan-mode" class="companion-status"></p>
+          <label for="review-plan-title">计划标题</label>
+          <input id="review-plan-title" maxlength="120" required>
+          <label for="review-plan-time">明日提醒时间</label>
+          <input id="review-plan-time" type="time" required>
+          <div class="companion-actions">
+            <button id="review-save" type="submit" class="primary-button">确认明日计划</button>
+          </div>
+        </form>
+      </div>
+    </section>
     <section class="journal-timeline" aria-labelledby="timeline-heading">
       <h2 id="timeline-heading">日记时间轴</h2>
       <div id="journal-entries"></div>
