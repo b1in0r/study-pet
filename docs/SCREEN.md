@@ -32,7 +32,11 @@ python -m studypet.display --thread-id YOUR_THREAD_ID
 `--thread-id` 指定要展示的 Codex 对话；从 Codex 启动的终端也可使用 `CODEX_THREAD_ID` 环境变量。
 未选择对话时只显示用量，不自动读取其他对话。
 
-设备烧录屏幕固件后：
+设备烧录屏幕固件后，在仓库根目录双击 **打开计划管理.cmd**。脚本会同时启动计划网页和屏幕同步。先启动脚本也可以，桥接会在开发板连接后继续尝试同步。
+
+可以将要展示的 Codex 对话 ID 写入本机的 `.local/screen-thread-id.txt`，每次双击时使用该对话。
+
+需要单独调试屏幕时，在仓库根目录运行：
 
 ```powershell
 python -m studypet.display --port auto --watch --thread-id YOUR_THREAD_ID

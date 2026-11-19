@@ -1,16 +1,38 @@
 """PC screen bridge. Run: python -m studypet.display --help."""
 import argparse
+import errno
 import json
 import os
 import sys
 import time
 from datetime import datetime
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 from .codex_status import CodexStatus
 from .screen_protocol import frame_packet, pack_pixels
 from .screen_render import SHANGHAI, calendar_page, codex_page, prepare_font
 from .tasks import TaskStore
+
+
+@contextmanager
+def bridge_lock(path):
+    """Keep a single sender per output directory, including across launcher runs."""
+    with path.open('a+b') as handle:
+        try:
+            if os.name == 'nt':
+                import msvcrt
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            if error.errno not in (errno.EACCES, errno.EAGAIN):
+                raise
+            yield False
+        else:
+            yield True
 
 
 def save_screen_status(directory, connected):
@@ -74,9 +96,20 @@ def main():
     args = parser.parse_args()
     if args.interval < 15:
         parser.error('--interval 至少为 15 秒')
-    face = prepare_font(args.font)
     output = Path(args.preview_dir)
     output.mkdir(parents=True, exist_ok=True)
+    lock = bridge_lock(output.parent / 'screen-bridge.lock') if args.port else nullcontext(True)
+    with lock as acquired:
+        if not acquired:
+            print('屏幕同步已在运行', flush=True)
+            return
+        if args.port and args.watch:
+            (output.parent / 'screen-bridge.pid').write_text(str(os.getpid()), encoding='ascii')
+        run(args, output)
+
+
+def run(args, output):
+    face = prepare_font(args.font)
     store = TaskStore(args.db)
     client = None
     snapshot = {}

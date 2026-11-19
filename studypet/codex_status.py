@@ -6,11 +6,34 @@ import shutil
 import subprocess
 import threading
 import time
+from pathlib import Path
+
+
+def find_codex():
+    executable = shutil.which('codex')
+    if executable or os.name != 'nt':
+        return executable
+    # The desktop app can put its CLI on PATH only within Codex sessions.
+    try:
+        package = subprocess.run(
+            ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+             '(Get-AppxPackage -Name OpenAI.Codex | Sort-Object Version -Descending | '
+             'Select-Object -First 1).InstallLocation'],
+            capture_output=True, text=True, timeout=6, creationflags=subprocess.CREATE_NO_WINDOW,
+        )
+    except (OSError, subprocess.TimeoutExpired, UnicodeError):
+        return None
+    location = package.stdout.strip()
+    if package.returncode == 0 and location:
+        candidate = Path(location) / 'app' / 'resources' / 'codex.exe'
+        if candidate.is_file():
+            return str(candidate)
+    return None
 
 
 class CodexStatus:
     def __init__(self, executable=None, timeout=20):
-        executable = executable or shutil.which('codex')
+        executable = executable or find_codex()
         if not executable:
             raise RuntimeError('找不到 Codex CLI，请先安装并登录')
         self.timeout = timeout
