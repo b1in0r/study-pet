@@ -35,12 +35,13 @@
     </form>
     <section class="journal-timeline daily-review" aria-labelledby="review-heading">
       <h2 id="review-heading">晚间复盘</h2>
-      <form id="review-form" class="companion-actions">
+      <p id="review-model-note" class="companion-status" {{codex_only}}>复盘时，Codex 会在 OpenAI 云端处理当日日记片段、相关任务和明天可用时间。</p>
+      <form id="review-form" class="companion-actions" data-text-model="{{text_model}}">
         <label for="review-minutes">明天可用时间
           <input id="review-minutes" type="number" min="1" max="1440" step="1" placeholder="选填">
           分钟
         </label>
-        <button id="review-start" type="submit" class="secondary-button">复盘今天</button>
+        <button id="review-start" type="submit" class="secondary-button" aria-describedby="review-model-note">复盘今天</button>
       </form>
       <p id="review-status" class="companion-status" role="status"></p>
       <div id="review-results" hidden>

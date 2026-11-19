@@ -84,7 +84,8 @@ def review_today(body, tasks, journal, model, *, today=None):
             '待办': [{'ref': key, 'title': task['title']} for key, task in pending_refs.items()],
             '明天预计可用分钟': minutes,
         }, output_schema=REVIEW_SCHEMA)
-    except LocalAIError:
+    except LocalAIError as error:
+        response['model_error'] = str(error)
         return response
 
     if not isinstance(result, dict):

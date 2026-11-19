@@ -20,11 +20,12 @@
     <h1>问助理</h1>
     <p class="companion-intro">根据你的个人档案、计划和相关资料讨论下一步。建议可存成计划，由你确认时间。</p>
     <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
-    <form id="chat-form" class="companion-form">
+    <form id="chat-form" class="companion-form" data-text-model="{{text_model}}">
       <label for="question">你想问什么？</label>
       <textarea id="question" rows="3" maxlength="1000" placeholder="今晚只有 90 分钟，应该优先做哪件事？" required></textarea>
+      <p id="chat-model-note" class="companion-status" {{codex_only}}>发送时，Codex 会在 OpenAI 云端处理问题、近期对话、档案片段、近期任务和匹配的资料片段。勾选下方选项会附上近期日记片段。</p>
       <div class="companion-actions">
-        <button id="ask" class="primary-button" type="submit">发送</button>
+        <button id="ask" class="primary-button" type="submit" aria-describedby="chat-model-note">发送</button>
         <label><input type="checkbox" id="include-journal"> 本次参考近一周日记</label>
       </div>
       <p id="chat-status" class="companion-status" role="status"></p>

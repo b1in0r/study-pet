@@ -288,7 +288,8 @@ reviewForm.addEventListener('submit', async event => {
   reviewStart.disabled = true;
   currentReview = null;
   $('#review-results').hidden = true;
-  reviewStatus('正在整理今天已经保存的记录…');
+  const modelName = reviewForm.dataset.textModel === 'codex' ? 'Codex' : '本地模型';
+  reviewStatus(`正在请${modelName}整理今天的记录…`);
   try {
     const minutes = $('#review-minutes').valueAsNumber;
     const result = await request('/api/review/today', {
@@ -296,7 +297,8 @@ reviewForm.addEventListener('submit', async event => {
       body: JSON.stringify({minutes: Number.isNaN(minutes) ? null : minutes}),
     });
     showReview(result);
-    reviewStatus(result.mode === 'model' ? '复盘已生成。' : '已按本地记录整理。');
+    const fallback = result.model_error ? `${result.model_error} 已按本地记录整理。` : '已按本地记录整理。';
+    reviewStatus(result.mode === 'model' ? `${modelName}已生成复盘。` : fallback);
   } catch (error) {
     reviewStatus(error.message, true);
   } finally {

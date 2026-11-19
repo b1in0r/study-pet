@@ -19,6 +19,16 @@ INSTRUCTION = (
     '输出 JSON 对象，字段 answer 为回答正文，source_ids 为实际用到的来源 ID 数组，'
     'task_title 为一条可执行的计划标题或 null。用户会自行确认任务日期与时间。'
 )
+ASSISTANT_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'answer': {'type': 'string'},
+        'source_ids': {'type': 'array', 'items': {'type': 'string'}},
+        'task_title': {'type': ['string', 'null']},
+    },
+    'required': ['answer', 'source_ids', 'task_title'],
+    'additionalProperties': False,
+}
 
 
 def build_sources(question, today, tasks, profile, library, journal, include_journal):
@@ -100,11 +110,11 @@ def answer(body, model, tasks, profile, library, journal):
         'sources': sources,
     }
     try:
-        result = model.generate(INSTRUCTION, context)
+        result = model.generate(INSTRUCTION, context, output_schema=ASSISTANT_SCHEMA)
     except LocalAIError as error:
         return source_summary(sources, str(error))
     if not isinstance(result, dict) or not isinstance(result.get('answer'), str) or not result['answer'].strip():
-        return source_summary(sources, '本地模型没有产出可显示的回答。')
+        return source_summary(sources, '模型没有产出可显示的回答。')
     selected = result.get('source_ids')
     cited = [source for source in sources if source['id'] in selected] if isinstance(selected, list) else []
     task = result.get('task_title')

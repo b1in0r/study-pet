@@ -2,6 +2,7 @@
 import argparse
 import json
 import mimetypes
+import os
 import re
 import sys
 from contextlib import closing
@@ -16,6 +17,7 @@ from .notifications import DesktopNotifier
 from .profile import PROFILE_KINDS, ProfileStore
 from .journal import JournalStore
 from .local_ai import LocalAIError, MAX_AUDIO_BYTES, Ollama, Transcriber
+from .codex_text import CodexText
 from .assistant import answer
 from .review import review_today
 from .knowledge.library import DOCUMENT_CATEGORIES, LibraryStore, MAX_UPLOAD_BYTES
@@ -42,7 +44,10 @@ def task_fields(body):
     return title.strip(), due
 
 
-def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *, enable_agent=False, notifier=None):
+def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *,
+                  enable_agent=False, notifier=None, text_model='codex'):
+    if text_model not in ('codex', 'ollama'):
+        raise ValueError('文字模型请选择 codex 或 ollama')
     store = TaskStore(db)
     agent = AgentStore(store)
     local = Path(state_dir)
@@ -50,7 +55,7 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
     library.recover_incomplete()
     profile = ProfileStore(db)
     journal = JournalStore(db)
-    model = Ollama(local)
+    model = CodexText() if text_model == 'codex' else Ollama(local)
     transcriber = Transcriber(local)
 
     class Handler(BaseHTTPRequestHandler):
@@ -189,7 +194,11 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 kind = 'text/javascript'
             if kind.startswith('text/'):
                 kind += '; charset=utf-8'
-            self.respond(200, asset.read_bytes(), kind)
+            data = asset.read_bytes()
+            if parsed.path in ('/assistant', '/journal'):
+                data = data.replace(b'{{text_model}}', text_model.encode('ascii'))
+                data = data.replace(b'{{codex_only}}', b'' if text_model == 'codex' else b'hidden')
+            self.respond(200, data, kind)
 
         def mutate(self):
             if not self.valid_host():
@@ -362,9 +371,12 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--db', default='.local/studypet.sqlite3')
     parser.add_argument('--state-dir', default='.local')
+    parser.add_argument('--text-model', choices=('codex', 'ollama'),
+                        default=os.environ.get('STUDYPET_TEXT_MODEL', 'codex'), help='文字生成服务，默认 Codex')
     parser.add_argument('--no-agent', action='store_true', help='关闭后台提醒，仅运行计划网页')
     args = parser.parse_args()
-    with create_server(args.port, args.db, args.state_dir, enable_agent=not args.no_agent) as server:
+    with create_server(args.port, args.db, args.state_dir, enable_agent=not args.no_agent,
+                       text_model=args.text_model) as server:
         print(f'StudyPet 计划管理：http://127.0.0.1:{server.server_port}', flush=True)
         try:
             server.serve_forever()

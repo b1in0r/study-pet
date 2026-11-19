@@ -5,7 +5,7 @@
 - Windows 单机学习助理，Python 3.11+；网页与 CLI 共用 SQLite。
 - 现有功能：任务、手动记忆本、历史、电脑/网页提醒、USB 扬声器、实体桌历与本地资料库。
 - 正式数据库为 v5（10 张业务表），迁移入口 `studypet/storage/migrate.py`。
-- 个人档案可手动维护并关联资料。助理对话使用本机 Ollama，日记保存在本机，语音转写使用本地 Whisper。
+- 个人档案可手动维护并关联资料。文字生成默认调用已登录的 Codex CLI，可切换到本机 Ollama。日记保存在本机，语音转写使用本地 Whisper。
 - 架构规划入口：`docs/architecture/README.md`。先核对当前源码与迁移版本，再依据规划开发。
 
 ## 目录与数据边界

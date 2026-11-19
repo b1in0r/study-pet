@@ -183,7 +183,7 @@ class PlannerWebTests(unittest.TestCase):
         self.assertEqual(code, 201)
         path = f'/api/journal/{created["id"]}'
         self.assertEqual(self.request('PATCH', path, {'day': today, 'body': '已校正的虚构日记'})[0], 200)
-        with patch('studypet.local_ai.Ollama.generate') as generate:
+        with patch('studypet.codex_text.CodexText.generate') as generate:
             generate.return_value = {'answer': '样例回答', 'source_ids': ['S1', 'S999'], 'task_title': '一分钟复盘'}
             code, data = self.request('POST', '/api/assistant', {'question': '今天进度如何？'})
             self.assertEqual(code, 200)
@@ -208,17 +208,18 @@ class PlannerWebTests(unittest.TestCase):
         pending = self.add('补写论文结果部分', day=today.isoformat())
         original = TaskStore(self.db).list()
 
-        with patch('studypet.local_ai.Ollama.generate', side_effect=LocalAIError('测试无模型')):
+        with patch('studypet.codex_text.CodexText.generate', side_effect=LocalAIError('测试无模型')):
             code, review = self.request('POST', '/api/review/today', {})
         self.assertEqual(code, 200)
         self.assertEqual(review['mode'], 'records')
+        self.assertEqual(review['model_error'], '测试无模型')
         self.assertEqual(review['journal'], ['今天整理了实验数据'])
         self.assertEqual(review['completed'], ['今天完成的跨日事项'])
         self.assertEqual(review['suggestion']['existing']['id'], pending)
         self.assertTrue(review['question'])
         self.assertEqual(TaskStore(self.db).list(), original)
 
-        with patch('studypet.local_ai.Ollama.generate') as generate:
+        with patch('studypet.codex_text.CodexText.generate') as generate:
             generate.return_value = {'progress': '实验数据已经整理。', 'task_title': '补写论文结果部分',
                                      'reason': '今天完成了数据整理。', 'task_ref': f'T{pending}'}
             code, review = self.request('POST', '/api/review/today', {'minutes': 90})
@@ -233,7 +234,7 @@ class PlannerWebTests(unittest.TestCase):
         tasks = self.request('GET', f'/api/tasks?date={tomorrow}')[1]['tasks']
         self.assertEqual([task['id'] for task in tasks], [pending])
 
-        with patch('studypet.local_ai.Ollama.generate', return_value={
+        with patch('studypet.codex_text.CodexText.generate', return_value={
             'task_title': '今天完成的跨日事项', 'task_ref': f'T{pending}',
             'reason': '重新安排已完成事项', 'question': '今天进展如何？',
         }):

@@ -1,6 +1,7 @@
 'use strict';
 
 const $ = selector => document.querySelector(selector);
+const chatForm = $('#chat-form');
 const ask = $('#ask');
 const question = $('#question');
 const chatStatus = $('#chat-status');
@@ -37,7 +38,8 @@ function addMessage(speaker, content) {
 }
 
 function showReply(reply) {
-  const article = addMessage(reply.mode === 'source_summary' ? '本地资料概览' : 'StudyPet', reply.answer);
+  const modelName = chatForm.dataset.textModel === 'codex' ? 'Codex' : '本地模型';
+  const article = addMessage(reply.mode === 'source_summary' ? '本地资料概览' : modelName, reply.answer);
   if (reply.sources.length) {
     const list = document.createElement('ul');
     list.className = 'chat-source-list';
@@ -66,7 +68,7 @@ function showReply(reply) {
   }
 }
 
-$('#chat-form').addEventListener('submit', async event => {
+chatForm.addEventListener('submit', async event => {
   event.preventDefault();
   const message = question.value.trim();
   if (requestInProgress || !message) return;
@@ -74,7 +76,7 @@ $('#chat-form').addEventListener('submit', async event => {
   ask.disabled = true;
   question.readOnly = true;
   chatStatus.classList.remove('error');
-  chatStatus.textContent = '正在本机整理回答，首次加载模型可能需要稍等…';
+  chatStatus.textContent = chatForm.dataset.textModel === 'codex' ? '正在等待 Codex 回答…' : '正在本机整理回答…';
   try {
     const includeJournal = $('#include-journal').checked;
     const reply = await jsonRequest('/api/assistant', {
