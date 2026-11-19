@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>问助理 · StudyPet</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/companion.css">
+  <script src="/assistant.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand"><span>StudyPet</span></a>
+    <nav class="companion-nav" aria-label="主导航">
+      <a href="/">学习计划</a><a href="/assistant" aria-current="page">问助理</a><a href="/journal">快速日记</a>
+    </nav>
+  </header>
+  <main class="companion-page">
+    <h1>问助理</h1>
+    <p class="companion-intro">根据你的个人档案、计划和相关资料讨论下一步。建议可存成计划，由你确认时间。</p>
+    <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+    <form id="chat-form" class="companion-form">
+      <label for="question">你想问什么？</label>
+      <textarea id="question" rows="3" maxlength="1000" placeholder="今晚只有 90 分钟，应该优先做哪件事？" required></textarea>
+      <div class="companion-actions">
+        <button id="ask" class="primary-button" type="submit">发送</button>
+        <label><input type="checkbox" id="include-journal"> 本次参考近一周日记</label>
+      </div>
+      <p id="chat-status" class="companion-status" role="status"></p>
+    </form>
+    <dialog id="plan-dialog" aria-labelledby="plan-heading">
+      <h2 id="plan-heading">保存为计划</h2>
+      <form id="plan-form" class="companion-form">
+        <label for="plan-title">标题</label><input id="plan-title" maxlength="120" required>
+        <label for="plan-date">日期（北京时间）</label><input id="plan-date" type="date" required>
+        <label for="plan-time">提醒时间</label><input id="plan-time" type="time" required>
+        <div class="companion-actions">
+          <button id="save-plan" type="submit" class="primary-button">确认保存</button>
+          <button id="cancel-plan" type="button" class="text-button">取消</button>
+        </div>
+        <p id="plan-status" class="companion-status" role="status"></p>
+      </form>
+    </dialog>
+  </main>
+</body>
+</html>

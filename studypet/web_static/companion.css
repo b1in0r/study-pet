@@ -1,0 +1,77 @@
+.companion-nav {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.companion-nav [aria-current] {
+  color: var(--teal);
+  font-weight: 650;
+}
+
+.companion-page {
+  max-width: 860px;
+  margin: auto;
+  padding: 35px 28px 56px;
+}
+
+.companion-intro {
+  margin: 12px 0 24px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.companion-form {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+}
+
+.companion-form label {
+  font-size: 13px;
+}
+
+.companion-form :is(textarea, input:not([type="checkbox"])) {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #ccd7df;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.companion-form textarea { resize: vertical; }
+.companion-form textarea:focus-visible { outline: 2px solid var(--teal); }
+.companion-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.companion-actions label { display: flex; gap: 6px; align-items: center; }
+.companion-actions input[type="checkbox"] { min-height: auto; accent-color: var(--teal); }
+.companion-date { display: grid; gap: 5px; max-width: 180px; }
+.companion-status { min-height: 1.4em; color: var(--muted); font-size: 13px; }
+.companion-status.error { color: var(--danger); }
+.companion-entry { padding: 18px 0; border-bottom: 1px solid var(--line); }
+.companion-entry h3 { font-size: 15px; margin-bottom: 7px; }
+.companion-entry p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: 14px; }
+.companion-entry .companion-actions { margin-top: 8px; }
+.journal-timeline { margin-top: 30px; }
+.journal-timeline h2 { font-size: 18px; }
+.chat-messages { margin-bottom: 20px; }
+.chat-messages:empty { display: none; }
+.chat-source-list { font-size: 12px; line-height: 1.7; color: var(--muted); padding-left: 20px; overflow-wrap: anywhere; }
+.recording { background-color: var(--danger); color: white; }
+
+@media (max-width: 600px) {
+  .companion-page { padding: 24px 17px 40px; }
+  .companion-nav { gap: 12px; }
+  .companion-form { padding: 14px; }
+  .topbar:has(.planner-links) { flex-wrap: wrap; height: auto; padding-block: 7px; }
+  .planner-links { flex-wrap: wrap; }
+}

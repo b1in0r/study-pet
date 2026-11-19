@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .database import connect_database
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _v1(db):
@@ -67,4 +67,6 @@ def initialize_database(path):
             _sql(db, '0003_document_category.sql')
         if version < 4:
             _sql(db, '0004_personal_profile.sql')
+        if version < 5:
+            _sql(db, '0005_journal.sql')
         db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')

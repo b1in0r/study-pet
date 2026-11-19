@@ -14,6 +14,9 @@ from .tasks import TaskStore
 from .agent import AgentStore, ReminderEngine
 from .notifications import DesktopNotifier
 from .profile import PROFILE_KINDS, ProfileStore
+from .journal import JournalStore
+from .local_ai import LocalAIError, MAX_AUDIO_BYTES, Ollama, Transcriber
+from .assistant import answer
 from .knowledge.library import DOCUMENT_CATEGORIES, LibraryStore, MAX_UPLOAD_BYTES
 
 SHANGHAI = timezone(timedelta(hours=8), 'Asia/Shanghai')
@@ -45,6 +48,9 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
     library = LibraryStore(db,local)
     library.recover_incomplete()
     profile = ProfileStore(db)
+    journal = JournalStore(db)
+    model = Ollama(local)
+    transcriber = Transcriber(local)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -76,6 +82,15 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
             parsed = urlsplit(self.path)
             if parsed.path == '/api/profile':
                 self.respond(200, {'entries': profile.list(), 'kinds': PROFILE_KINDS})
+                return
+            if parsed.path == '/api/journal':
+                before_id = parse_qs(parsed.query).get('before', [None])[0]
+                try:
+                    entries = journal.list(limit=51, before_id=before_id)
+                    self.respond(200, {'entries': entries[:50], 'has_more': len(entries) > 50,
+                                       'today': datetime.now(SHANGHAI).date().isoformat()})
+                except ValueError as error:
+                    self.respond(400, {'error': str(error)})
                 return
             if parsed.path.startswith('/api/library/'):
                 try:
@@ -156,6 +171,9 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
             assets = {'/': STATIC / 'index.html', '/app.css': STATIC / 'app.css', '/app.js': STATIC / 'app.js',
                       '/profile': STATIC / 'profile.html', '/profile.js': STATIC / 'profile.js',
                       '/profile.css': STATIC / 'profile.css',
+                      '/journal': STATIC / 'journal.html', '/journal.js': STATIC / 'journal.js',
+                      '/assistant': STATIC / 'assistant.html', '/assistant.js': STATIC / 'assistant.js',
+                      '/companion.css': STATIC / 'companion.css',
                       '/library':STATIC/'library.html','/library.js':STATIC/'library.js','/library.css':STATIC/'library.css',
                       '/favicon.svg': STATIC / 'favicon.svg',
                       '/assets/font.ttf': local / 'fonts/NotoSansSC-wght.ttf',
@@ -183,9 +201,14 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
             path = urlsplit(self.path).path
             match = re.fullmatch(r'/api/tasks/(\d+)', path)
             profile_match = re.fullmatch(r'/api/profile/([0-9a-f-]{36})', path)
+            journal_match = re.fullmatch(r'/api/journal/([0-9a-f-]{36})', path)
             try:
                 document_match = re.fullmatch(r'/api/library/documents/([0-9a-f-]{36})',path)
                 if self.command == 'DELETE':
+                    if journal_match:
+                        journal.delete(journal_match[1])
+                        self.respond(200, {'ok': True})
+                        return
                     if profile_match:
                         profile.delete(profile_match[1])
                         self.respond(200, {'ok': True})
@@ -204,6 +227,20 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                         return
                     store.delete(int(match[1]))
                     self.respond(200, {'ok': True})
+                    return
+                if self.command == 'POST' and path == '/api/journal/transcribe':
+                    mime = self.headers.get('Content-Type', '').split(';')[0]
+                    if mime not in ('audio/webm', 'audio/ogg', 'audio/mp4', 'audio/wav'):
+                        self.respond(415, {'error': '浏览器录音格式暂不支持'})
+                        return
+                    length = int(self.headers.get('Content-Length', '0'))
+                    if not 0 < length <= MAX_AUDIO_BYTES:
+                        self.respond(413, {'error': '请选择 8 MB 以内的非空录音'})
+                        return
+                    recording = self.rfile.read(length)
+                    if len(recording) != length:
+                        raise ValueError('录音上传未完成，请重试')
+                    self.respond(200, {'text': transcriber.transcribe(recording)})
                     return
                 if self.command == 'POST' and path == '/api/library/documents':
                     if self.headers.get('Content-Type','').split(';')[0].strip() != 'application/octet-stream':
@@ -231,6 +268,16 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('请求格式不正确')
+                if self.command == 'POST' and path == '/api/assistant':
+                    self.respond(200, answer(body, model, store, profile, library, journal))
+                    return
+                if self.command == 'POST' and path == '/api/journal':
+                    self.respond(201, {'id': journal.save(body.get('day'), body.get('body'))})
+                    return
+                if self.command == 'PATCH' and journal_match:
+                    ident = journal.save(body.get('day'), body.get('body'), journal_match[1])
+                    self.respond(200, {'id': ident})
+                    return
                 if self.command == 'POST' and path == '/api/profile':
                     self.respond(201, {'id': profile.save(body)})
                     return
@@ -277,6 +324,8 @@ def create_server(port=8765, db='.local/studypet.sqlite3', state_dir='.local', *
                     self.respond(200, {'ok': True})
                 else:
                     self.respond(404, {'error': '未找到计划'})
+            except LocalAIError as error:
+                self.respond(503, {'error': str(error)})
             except (ValueError, TypeError, UnicodeError) as error:
                 self.respond(400, {'error': str(error) if isinstance(error, ValueError) else '计划格式不正确'})
 

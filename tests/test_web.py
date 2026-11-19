@@ -2,6 +2,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from contextlib import closing
 from http.client import HTTPConnection
 from pathlib import Path
@@ -172,6 +173,27 @@ class PlannerWebTests(unittest.TestCase):
         self.assertIsNone(entry['document_title'])
         self.assertEqual(self.request('DELETE', path)[0], 200)
         self.assertEqual(self.request('GET', '/api/profile')[1]['entries'], [])
+
+    def test_journal_confirmation_and_assistant_opt_in(self):
+        today = self.request('GET', '/api/journal')[1]['today']
+        self.assertEqual(self.request('POST', '/api/journal', {'day': '2026-02-30', 'body': '无效'} )[0], 400)
+        code, created = self.request('POST', '/api/journal', {'day': today, 'body': '虚构日记，仅供测试'})
+        self.assertEqual(code, 201)
+        path = f'/api/journal/{created["id"]}'
+        self.assertEqual(self.request('PATCH', path, {'day': today, 'body': '已校正的虚构日记'})[0], 200)
+        with patch('studypet.local_ai.Ollama.generate') as generate:
+            generate.return_value = {'answer': '样例回答', 'source_ids': ['S1', 'S999'], 'task_title': '一分钟复盘'}
+            code, data = self.request('POST', '/api/assistant', {'question': '今天进度如何？'})
+            self.assertEqual(code, 200)
+            self.assertEqual(data['sources'], [])
+            self.assertEqual(generate.call_args.args[1]['sources'], [])
+            code, data = self.request('POST', '/api/assistant', {'question': '今天进度如何？', 'include_journal': True})
+            self.assertEqual(code, 200)
+            self.assertEqual([source['id'] for source in data['sources']], ['S1'])
+            self.assertEqual(generate.call_args.args[1]['sources'][0]['text'], '已校正的虚构日记')
+        self.assertEqual(TaskStore(self.db).list(), [])
+        self.assertEqual(self.request('DELETE', path)[0], 200)
+        self.assertEqual(self.request('GET', '/api/journal')[1]['entries'], [])
 
 
 if __name__ == '__main__':

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>快速日记 · StudyPet</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/companion.css">
+  <script src="/journal.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand"><span>StudyPet</span></a>
+    <nav class="companion-nav" aria-label="主导航">
+      <a href="/">学习计划</a><a href="/assistant">问助理</a><a href="/journal" aria-current="page">快速日记</a>
+    </nav>
+  </header>
+  <main class="companion-page">
+    <h1>快速日记</h1>
+    <p class="companion-intro">说说今天做了什么。录音在本机转成文字，确认后保存到时间轴。</p>
+    <form id="journal-form" class="companion-form">
+      <label class="companion-date" for="journal-day">日期 <input id="journal-day" type="date" required></label>
+      <div class="companion-actions">
+        <button id="record" type="button" class="secondary-button">开始录音</button>
+        <button id="retry-recording" type="button" class="text-button" hidden>重试转写</button>
+      </div>
+      <label for="journal-body">日记正文</label>
+      <textarea id="journal-body" rows="6" maxlength="4000" placeholder="今天我做了什么？有什么值得记下来？" required></textarea>
+      <div class="companion-actions">
+        <button id="save-journal" class="primary-button" type="submit">保存日记</button>
+        <button id="cancel-edit" class="text-button" type="button" hidden>取消编辑</button>
+      </div>
+      <p id="journal-status" class="companion-status" role="status"></p>
+    </form>
+    <section class="journal-timeline" aria-labelledby="timeline-heading">
+      <h2 id="timeline-heading">日记时间轴</h2>
+      <div id="journal-entries"></div>
+      <button id="older-journal" class="text-button" type="button" hidden>查看更早的日记</button>
+    </section>
+  </main>
+</body>
+</html>
